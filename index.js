@@ -11,55 +11,46 @@ const client = new Client({
 
 // Configuration
 const config = {
-    adminRoles: ['Workflow Admin', 'Admin', 'Administrator'],
-    managerRoles: ['Workflow Manager', 'Manager', 'Moderator', 'Staff'],
-    userRoles: ['Workflow User', 'Member', 'Verified'],
+    requiredRoleId: '1398018785461538878', // Role required to claim rewards
+    verifiedRoleId: '1398018753542881520', // Verified role required in thread
     workflowTimeout: 600000, // 10 minutes
     threadTimeout: 300000    // 5 minutes
 };
 
 // Permission checker functions
-function hasRole(member, roleNames) {
-    return member.roles.cache.some(role => roleNames.includes(role.name));
+function hasRequiredRole(member) {
+    return member.roles.cache.has(config.requiredRoleId);
 }
 
-function isAdmin(member) {
-    return member.permissions.has(PermissionFlagsBits.Administrator) || hasRole(member, config.adminRoles);
+function hasVerifiedRole(member) {
+    return member.roles.cache.has(config.verifiedRoleId);
 }
 
-function isManager(member) {
-    return isAdmin(member) || hasRole(member, config.managerRoles);
+function canClaimReward(member) {
+    return hasRequiredRole(member);
 }
 
-function isUser(member) {
-    return hasRole(member, config.userRoles) || member.roles.cache.size > 1; // Has roles beyond @everyone
-}
-
-function canStartWorkflow(member) {
-    return isManager(member) || isAdmin(member);
-}
-
-function canParticipate(member) {
-    return isUser(member) || isManager(member) || isAdmin(member);
+function canVerifyInThread(member) {
+    return hasVerifiedRole(member);
 }
 
 // Embed creation functions
-function createWorkflowEmbed(title, description, initiator) {
+function createRewardEmbed(title, description, initiator) {
     return new EmbedBuilder()
-        .setTitle(`🔄 ${title}`)
+        .setTitle(`🎁 ${title}`)
         .setDescription(description)
-        .setColor(0x0099FF)
+        .setColor(0xFFD700) // Gold color for rewards
         .addFields(
-            { name: 'Initiated by', value: initiator.toString(), inline: true },
+            { name: 'Reward Available For', value: initiator.toString(), inline: true },
             { name: 'Server', value: initiator.guild.name, inline: true },
-            { name: 'Status', value: '🟡 Waiting for interaction', inline: true },
+            { name: 'Status', value: '🟡 Ready to claim', inline: true },
             {
-                name: '📋 Instructions',
-                value: '1. Click **Start Process** to begin\n2. Complete verification in the created thread\n3. Channel will be created upon successful completion',
+                name: '📋 Requirements',
+                value: '1. Must have required role to claim\n2. Need 1 invite to unlock reward\n3. Complete verification in private thread',
                 inline: false
             }
         )
-        .setFooter({ text: 'Click the buttons below to interact with this workflow', iconURL: initiator.displayAvatarURL() })
+        .setFooter({ text: 'Click the button below to claim your reward', iconURL: initiator.displayAvatarURL() })
         .setTimestamp();
 }
 
@@ -87,37 +78,37 @@ client.once('ready', async () => {
     console.log(`📊 Bot is in ${client.guilds.cache.size} guilds`);
     
     // Set bot status
-    client.user.setActivity('for workflow commands', { type: 'WATCHING' });
+    client.user.setActivity('for reward claims', { type: 'WATCHING' });
     
     // Register slash commands
     const commands = [
         {
-            name: 'workflow',
-            description: 'Start a role-based workflow process',
+            name: 'claim-reward',
+            description: 'Setup a reward claim system',
             options: [
                 {
                     type: 7, // CHANNEL
                     name: 'channel',
-                    description: 'The channel to send the workflow embed to',
+                    description: 'The channel to send the reward claim embed to',
                     required: false
                 },
                 {
                     type: 3, // STRING
                     name: 'title',
-                    description: 'Title for the workflow embed',
+                    description: 'Title for the reward',
                     required: false
                 },
                 {
                     type: 3, // STRING
                     name: 'description',
-                    description: 'Description for the workflow process',
+                    description: 'Description of the reward',
                     required: false
                 }
             ]
         },
         {
-            name: 'workflow-status',
-            description: 'Check workflow system status'
+            name: 'reward-status',
+            description: 'Check reward system status'
         }
     ];
     
@@ -156,54 +147,48 @@ client.on('interactionCreate', async (interaction) => {
 async function handleSlashCommand(interaction) {
     const { commandName, options } = interaction;
     
-    if (commandName === 'workflow') {
+    if (commandName === 'claim-reward') {
         const channel = options.getChannel('channel') || interaction.channel;
-        const title = options.getString('title') || 'Workflow Process';
-        const description = options.getString('description') || 'Click the button below to start the workflow process.';
+        const title = options.getString('title') || 'Exclusive Reward';
+        const description = options.getString('description') || 'An exclusive reward is available for qualified members. Click below to claim it!';
         
-        // Check permissions
-        if (!canStartWorkflow(interaction.member)) {
+        // Check if user has admin permissions to setup rewards
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return await interaction.reply({
-                content: '❌ You don\'t have permission to start workflow processes.',
-                ephemeral: true
+                content: '❌ You need Administrator permission to setup reward claims.',
+                flags: [4096] // EPHEMERAL flag
             });
         }
         
         // Create embed and button
-        const embed = createWorkflowEmbed(title, description, interaction.member);
+        const embed = createRewardEmbed(title, description, interaction.member);
         const button = new ButtonBuilder()
-            .setCustomId('start_workflow')
-            .setLabel('Start Process')
-            .setStyle(ButtonStyle.Primary)
-            .setEmoji('🚀');
+            .setCustomId('claim_reward')
+            .setLabel('Claim Reward')
+            .setStyle(ButtonStyle.Success)
+            .setEmoji('🎁');
         
-        const statusButton = new ButtonBuilder()
-            .setCustomId('check_status')
-            .setLabel('Check Status')
-            .setStyle(ButtonStyle.Secondary)
-            .setEmoji('📊');
-        
-        const row = new ActionRowBuilder().addComponents(button, statusButton);
+        const row = new ActionRowBuilder().addComponents(button);
         
         try {
             await channel.send({ embeds: [embed], components: [row] });
             await interaction.reply({
-                content: `✅ Workflow embed sent to ${channel}`,
-                ephemeral: true
+                content: `✅ Reward claim system setup in ${channel}`,
+                flags: [4096] // EPHEMERAL flag
             });
-            console.log(`Workflow started by ${interaction.user.tag} in ${channel.name}`);
+            console.log(`Reward claim setup by ${interaction.user.tag} in ${channel.name}`);
         } catch (error) {
             await interaction.reply({
                 content: '❌ I don\'t have permission to send messages to that channel.',
-                ephemeral: true
+                flags: [4096] // EPHEMERAL flag
             });
         }
     }
     
-    else if (commandName === 'workflow-status') {
+    else if (commandName === 'reward-status') {
         const embed = new EmbedBuilder()
-            .setTitle('📊 Workflow System Status')
-            .setColor(0x0099FF)
+            .setTitle('📊 Reward System Status')
+            .setColor(0xFFD700)
             .addFields(
                 { name: 'Bot Status', value: '🟢 Online and Ready', inline: true },
                 { name: 'Server', value: interaction.guild.name, inline: true }
@@ -218,11 +203,11 @@ async function handleSlashCommand(interaction) {
         const permStatus = [];
         permStatus.push(permissions.has(PermissionFlagsBits.ManageChannels) ? '✅ Manage Channels' : '❌ Manage Channels');
         permStatus.push(permissions.has(PermissionFlagsBits.ManageThreads) ? '✅ Manage Threads' : '❌ Manage Threads');
-        permStatus.push(permissions.has(PermissionFlagsBits.ManageRoles) ? '✅ Manage Roles' : '❌ Manage Roles');
+        permStatus.push(permissions.has(PermissionFlagsBits.CreatePrivateThreads) ? '✅ Create Private Threads' : '❌ Create Private Threads');
         
         embed.addFields({ name: 'Bot Permissions', value: permStatus.join('\n'), inline: false });
         
-        await interaction.reply({ embeds: [embed] });
+        await interaction.reply({ embeds: [embed], flags: [4096] });
     }
 }
 
@@ -230,47 +215,62 @@ async function handleSlashCommand(interaction) {
 async function handleButtonInteraction(interaction) {
     const { customId } = interaction;
     
-    if (customId === 'start_workflow') {
-        // Check permissions
-        if (!canParticipate(interaction.member)) {
+    if (customId === 'claim_reward') {
+        // Check if user has required role to claim rewards
+        if (!canClaimReward(interaction.member)) {
+            const requiredRole = interaction.guild.roles.cache.get(config.requiredRoleId);
+            const roleName = requiredRole ? requiredRole.name : 'Required Role';
+            
             return await interaction.reply({
-                content: '❌ You don\'t have permission to participate in workflows.',
-                ephemeral: true
+                content: `❌ You need the **${roleName}** role to claim rewards. Please get this role first and try again.`,
+                flags: [4096] // EPHEMERAL flag
             });
         }
         
-        // Create thread
-        const threadName = `workflow-${interaction.member.displayName}-${Date.now()}`;
+        // Create private thread
+        const threadName = `🎁-reward-claim-${interaction.member.displayName}`;
         
         try {
             const thread = await interaction.channel.threads.create({
                 name: threadName,
                 autoArchiveDuration: 60,
-                reason: `Workflow process started by ${interaction.user.tag}`
+                type: ChannelType.PrivateThread,
+                invitable: false,
+                reason: `Private reward claim thread for ${interaction.user.tag}`
             });
             
-            // Create welcome embed
+            // Add only the user to the private thread
+            await thread.members.add(interaction.user.id);
+            
+            // Create welcome embed for private thread
             const welcomeEmbed = new EmbedBuilder()
-                .setTitle('🎯 Workflow Process Started')
-                .setDescription(`Welcome ${interaction.member}! Your workflow process has begun.`)
-                .setColor(0x0099FF)
-                .addFields({
-                    name: 'Next Steps',
-                    value: 'Please complete the verification process below.',
-                    inline: false
-                })
+                .setTitle('🎁 Reward Claim Process')
+                .setDescription(`Welcome ${interaction.member}! You're now in your private reward claim area.`)
+                .setColor(0xFFD700)
+                .addFields(
+                    {
+                        name: '📋 Requirements Check',
+                        value: '✅ Required role: Verified\n⏳ Verification status: Pending\n💎 Invite requirement: 1 invite needed',
+                        inline: false
+                    },
+                    {
+                        name: 'Next Steps',
+                        value: 'Complete the verification process below to claim your reward.',
+                        inline: false
+                    }
+                )
                 .setTimestamp();
             
             // Create verification button
             const verifyButton = new ButtonBuilder()
-                .setCustomId(`verify_role_${interaction.user.id}`)
-                .setLabel('Verify Role')
+                .setCustomId(`verify_claim_${interaction.user.id}`)
+                .setLabel('Complete Verification')
                 .setStyle(ButtonStyle.Success)
                 .setEmoji('✅');
             
             const cancelButton = new ButtonBuilder()
-                .setCustomId(`cancel_workflow_${interaction.user.id}`)
-                .setLabel('Cancel')
+                .setCustomId(`cancel_claim_${interaction.user.id}`)
+                .setLabel('Cancel Claim')
                 .setStyle(ButtonStyle.Danger)
                 .setEmoji('❌');
             
@@ -279,110 +279,88 @@ async function handleButtonInteraction(interaction) {
             await thread.send({ embeds: [welcomeEmbed], components: [verifyRow] });
             
             await interaction.reply({
-                content: `✅ Workflow thread created: ${thread}`,
-                ephemeral: true
+                content: `✅ Private reward claim thread created. Check your private thread to continue.`,
+                flags: [4096] // EPHEMERAL flag
             });
             
-            console.log(`Workflow thread created by ${interaction.user.tag} in ${interaction.guild.name}`);
+            console.log(`Private reward claim thread created by ${interaction.user.tag} in ${interaction.guild.name}`);
             
         } catch (error) {
-            console.error('Error creating thread:', error);
+            console.error('Error creating private thread:', error);
             await interaction.reply({
-                content: '❌ I don\'t have permission to create threads in this channel.',
-                ephemeral: true
+                content: '❌ I don\'t have permission to create private threads in this channel.',
+                flags: [4096] // EPHEMERAL flag
             });
         }
     }
     
-    else if (customId === 'check_status') {
-        const userLevel = isAdmin(interaction.member) ? 'Admin' : 
-                         isManager(interaction.member) ? 'Manager' : 
-                         isUser(interaction.member) ? 'User' : 'No Permissions';
+    else if (customId.startsWith('verify_claim_')) {
+        const userId = customId.split('_')[2];
         
+        if (interaction.user.id !== userId) {
+            return await interaction.reply({
+                content: '❌ Only the reward claimer can complete verification.',
+                flags: [4096] // EPHEMERAL flag
+            });
+        }
+        
+        // Check if user has verified role
+        if (!canVerifyInThread(interaction.member)) {
+            const verifiedRole = interaction.guild.roles.cache.get(config.verifiedRoleId);
+            const roleName = verifiedRole ? verifiedRole.name : 'Verified Role';
+            
+            return await interaction.reply({
+                content: `❌ You need the **${roleName}** role to complete verification. Please get verified first and try again.`,
+                flags: [4096] // EPHEMERAL flag
+            });
+        }
+        
+        // Verification successful, proceed to reward claim
         const embed = new EmbedBuilder()
-            .setTitle('📊 Your Workflow Status')
-            .setColor(0x0099FF)
+            .setTitle('✅ Verification Complete')
+            .setDescription(`Congratulations! Your verification is complete.`)
+            .setColor(0x00FF00)
             .addFields(
-                { name: 'User', value: interaction.member.toString(), inline: true },
-                { name: 'Permission Level', value: userLevel, inline: true },
-                { name: 'Server', value: interaction.guild.name, inline: true }
+                {
+                    name: '📋 Status Check',
+                    value: '✅ Required role: Verified\n✅ Verification status: Complete\n✅ Ready to claim reward',
+                    inline: false
+                },
+                {
+                    name: 'Final Step',
+                    value: 'Click \'Claim My Reward\' to receive your exclusive reward channel.',
+                    inline: false
+                }
             )
             .setTimestamp();
         
-        // Add role information
-        const roles = interaction.member.roles.cache
-            .filter(role => role.name !== '@everyone')
-            .map(role => role.name)
-            .join(', ');
-        
-        embed.addFields({
-            name: 'Your Roles',
-            value: roles || 'No special roles',
-            inline: false
-        });
-        
-        await interaction.reply({ embeds: [embed], ephemeral: true });
-    }
-    
-    else if (customId.startsWith('verify_role_')) {
-        const userId = customId.split('_')[2];
-        
-        if (interaction.user.id !== userId) {
-            return await interaction.reply({
-                content: '❌ Only the workflow initiator can verify their role.',
-                ephemeral: true
-            });
-        }
-        
-        // Check if user has manager or admin role
-        if (!isManager(interaction.member) && !isAdmin(interaction.member)) {
-            return await interaction.reply({
-                content: '❌ You need Manager or Admin role to complete this workflow.',
-                ephemeral: true
-            });
-        }
-        
-        // Role verified, proceed to final step
-        const roleType = isAdmin(interaction.member) ? 'Admin' : 'Manager';
-        
-        const embed = new EmbedBuilder()
-            .setTitle('✅ Role Verified')
-            .setDescription(`Your ${roleType} role has been verified!`)
-            .setColor(0x00FF00)
-            .addFields({
-                name: 'Next Step',
-                value: 'Click \'Create Channel\' to complete the workflow.',
-                inline: false
-            })
-            .setTimestamp();
-        
-        // Create final step button
-        const createChannelButton = new ButtonBuilder()
-            .setCustomId(`create_channel_${interaction.user.id}`)
-            .setLabel('Create Channel')
+        // Create final claim button
+        const claimButton = new ButtonBuilder()
+            .setCustomId(`final_claim_${interaction.user.id}`)
+            .setLabel('Claim My Reward')
             .setStyle(ButtonStyle.Success)
-            .setEmoji('🆕');
+            .setEmoji('🏆');
         
-        const finalRow = new ActionRowBuilder().addComponents(createChannelButton);
+        const finalRow = new ActionRowBuilder().addComponents(claimButton);
         
         await interaction.update({ embeds: [embed], components: [finalRow] });
         
-        console.log(`${roleType} role verified for ${interaction.user.tag}`);
+        console.log(`Verification completed for reward claim by ${interaction.user.tag}`);
     }
     
-    else if (customId.startsWith('cancel_workflow_')) {
+    else if (customId.startsWith('cancel_claim_')) {
         const userId = customId.split('_')[2];
         
         if (interaction.user.id !== userId) {
             return await interaction.reply({
-                content: '❌ Only the workflow initiator can cancel this workflow.',
-                ephemeral: true
+                content: '❌ Only the reward claimer can cancel this claim.',
+                flags: [4096] // EPHEMERAL flag
             });
         }
         
         const embed = createErrorEmbed(
-            'Workflow Cancelled',
-            'The workflow has been cancelled by the user.'
+            'Reward Claim Cancelled',
+            'The reward claim has been cancelled by the user.'
         );
         
         await interaction.update({ embeds: [embed], components: [] });
@@ -398,24 +376,24 @@ async function handleButtonInteraction(interaction) {
             }, 5000);
         }
         
-        console.log(`Workflow cancelled by ${interaction.user.tag}`);
+        console.log(`Reward claim cancelled by ${interaction.user.tag}`);
     }
     
-    else if (customId.startsWith('create_channel_')) {
+    else if (customId.startsWith('final_claim_')) {
         const userId = customId.split('_')[2];
         
         if (interaction.user.id !== userId) {
             return await interaction.reply({
-                content: '❌ Only the workflow initiator can create the channel.',
-                ephemeral: true
+                content: '❌ Only the reward claimer can claim the final reward.',
+                flags: [4096] // EPHEMERAL flag
             });
         }
         
-        // Create a new text channel
-        const channelName = `workflow-result-${interaction.member.displayName}`.toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+        // Create reward channel
+        const channelName = `🏆-reward-${interaction.member.displayName}`.toLowerCase().replace(/[^a-z0-9-_]/g, '-');
         
         try {
-            // Set up channel permissions
+            // Set up channel permissions - private to user and admins only
             const overwrites = [
                 {
                     id: interaction.guild.roles.everyone.id,
@@ -426,7 +404,9 @@ async function handleButtonInteraction(interaction) {
                     allow: [
                         PermissionFlagsBits.ViewChannel,
                         PermissionFlagsBits.SendMessages,
-                        PermissionFlagsBits.ManageMessages
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.AttachFiles,
+                        PermissionFlagsBits.EmbedLinks
                     ]
                 },
                 {
@@ -439,51 +419,55 @@ async function handleButtonInteraction(interaction) {
                 }
             ];
             
-            // Add workflow roles to permissions
-            const workflowRoles = interaction.member.roles.cache.filter(role => 
-                config.adminRoles.includes(role.name) || 
-                config.managerRoles.includes(role.name)
+            // Add admins to the reward channel
+            const adminMembers = interaction.guild.members.cache.filter(member => 
+                member.permissions.has(PermissionFlagsBits.Administrator)
             );
             
-            workflowRoles.forEach(role => {
-                overwrites.push({
-                    id: role.id,
-                    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]
-                });
+            adminMembers.forEach(member => {
+                if (member.id !== interaction.user.id) { // Don't duplicate user permissions
+                    overwrites.push({
+                        id: member.id,
+                        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]
+                    });
+                }
             });
             
-            const newChannel = await interaction.guild.channels.create({
+            const rewardChannel = await interaction.guild.channels.create({
                 name: channelName,
                 type: ChannelType.GuildText,
                 permissionOverwrites: overwrites,
-                reason: `Workflow completion channel for ${interaction.user.tag}`
+                reason: `Exclusive reward channel for ${interaction.user.tag}`
             });
             
-            // Send success message
+            // Send success message in thread
             const successEmbed = createSuccessEmbed(
-                'Workflow Complete!',
-                `Congratulations! Your workflow has been completed successfully.\n\n` +
-                `**New Channel Created:** ${newChannel}\n` +
-                `**Completed by:** ${interaction.member}\n` +
-                `**Completion Time:** <t:${Math.floor(Date.now() / 1000)}:F>`
+                'Reward Claimed Successfully!',
+                `🎉 Congratulations! Your exclusive reward has been claimed.\n\n` +
+                `**Reward Channel:** ${rewardChannel}\n` +
+                `**Claimed by:** ${interaction.member}\n` +
+                `**Claim Time:** <t:${Math.floor(Date.now() / 1000)}:F>`
             );
             
             await interaction.update({ embeds: [successEmbed], components: [] });
             
-            // Send welcome message to new channel
-            const welcomeEmbed = new EmbedBuilder()
-                .setTitle('🎉 Welcome to Your New Channel!')
-                .setDescription('This channel was created through the workflow system.')
+            // Send welcome message to reward channel
+            const rewardWelcomeEmbed = new EmbedBuilder()
+                .setTitle('🏆 Congratulations on Your Exclusive Reward!')
+                .setDescription(`Welcome to your exclusive reward channel, ${interaction.member}!\n\nThis private channel is your reward for completing the verification process and having the required invite.`)
                 .setColor(0xFFD700)
                 .addFields(
-                    { name: 'Channel Owner', value: interaction.member.toString(), inline: true },
-                    { name: 'Created', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true }
+                    { name: '🎁 Reward Details', value: 'This is your exclusive private channel', inline: true },
+                    { name: '👤 Claimed by', value: interaction.member.toString(), inline: true },
+                    { name: '📅 Claimed on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+                    { name: '🔒 Privacy', value: 'This channel is private and only visible to you and server admins', inline: false }
                 )
+                .setThumbnail(interaction.member.displayAvatarURL())
                 .setTimestamp();
             
-            await newChannel.send({ embeds: [welcomeEmbed] });
+            await rewardChannel.send({ embeds: [rewardWelcomeEmbed] });
             
-            // Archive the workflow thread
+            // Archive the claim thread
             if (interaction.channel.isThread()) {
                 setTimeout(async () => {
                     try {
@@ -494,13 +478,13 @@ async function handleButtonInteraction(interaction) {
                 }, 10000);
             }
             
-            console.log(`Workflow completed by ${interaction.user.tag}, channel ${newChannel.name} created`);
+            console.log(`Reward claimed by ${interaction.user.tag}, exclusive channel ${rewardChannel.name} created`);
             
         } catch (error) {
-            console.error('Error creating channel:', error);
+            console.error('Error creating reward channel:', error);
             await interaction.reply({
                 content: '❌ I don\'t have permission to create channels in this server.',
-                ephemeral: true
+                flags: [4096] // EPHEMERAL flag
             });
         }
     }

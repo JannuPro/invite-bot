@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a Discord bot that implements a role-based workflow system with interactive embeds, button interactions, thread management, and dynamic channel creation. The bot uses Discord.js v14 with slash commands and provides a structured workflow process for Discord servers.
+This is a Discord bot that implements a role-based reward claiming system with interactive embeds, button interactions, private thread management, and exclusive channel creation. The bot uses Discord.js v14 with slash commands and provides a private reward claiming process for Discord servers.
 
 ## User Preferences
 
