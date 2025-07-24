@@ -44,14 +44,18 @@ The application follows a modular architecture with clear separation of concerns
 
 ## Data Flow
 
-1. **Workflow Initiation**: User executes `/workflow` slash command
-2. **Permission Check**: System verifies user has required permissions
-3. **Embed Creation**: Bot creates interactive embed with workflow information
-4. **User Interaction**: User clicks "Start Process" button
-5. **Thread Creation**: Bot creates dedicated thread for workflow process
-6. **Verification Process**: User completes verification within thread
-7. **Channel Creation**: Upon successful completion, new channel is created
-8. **Cleanup**: Thread is archived and workflow is marked complete
+### Reward Claiming Process
+1. **Setup**: Admin executes `/claim-reward` slash command
+2. **Role Check**: System verifies user has role `1398018785461538878` to claim
+3. **Private Thread**: Bot creates private thread for user
+4. **Verification**: User must have role `1398018753542881520` (verified) to proceed
+5. **Reward Channel**: Upon verification, exclusive private channel is created
+
+### Invite Checking Process
+1. **Setup**: Admin executes `/invite-check` slash command
+2. **User Check**: User clicks "Check My Invites" button
+3. **Private Response**: Bot shows invite count (1 if has role, 0 if not) privately
+4. **Status Display**: Shows eligibility and guidance based on current status
 
 ## External Dependencies
 

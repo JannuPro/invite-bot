@@ -54,6 +54,25 @@ function createRewardEmbed(title, description, initiator) {
         .setTimestamp();
 }
 
+function createInviteCheckEmbed(title, description, initiator) {
+    return new EmbedBuilder()
+        .setTitle(`📊 ${title}`)
+        .setDescription(description)
+        .setColor(0x00BFFF) // Deep sky blue for invite checking
+        .addFields(
+            { name: 'Invite Checker', value: 'Check your current invite status', inline: true },
+            { name: 'Server', value: initiator.guild.name, inline: true },
+            { name: 'Status', value: '🔍 Ready to check', inline: true },
+            {
+                name: '📋 Information',
+                value: '• Click the button to check your invite count\n• Results are shown privately to you only\n• Invite count determines your eligibility for rewards',
+                inline: false
+            }
+        )
+        .setFooter({ text: 'Click the button below to check your invites', iconURL: initiator.displayAvatarURL() })
+        .setTimestamp();
+}
+
 function createSuccessEmbed(title, description) {
     return new EmbedBuilder()
         .setTitle(`✅ ${title}`)
@@ -102,6 +121,30 @@ client.once('ready', async () => {
                     type: 3, // STRING
                     name: 'description',
                     description: 'Description of the reward',
+                    required: false
+                }
+            ]
+        },
+        {
+            name: 'invite-check',
+            description: 'Setup an invite checking system',
+            options: [
+                {
+                    type: 7, // CHANNEL
+                    name: 'channel',
+                    description: 'The channel to send the invite check embed to',
+                    required: false
+                },
+                {
+                    type: 3, // STRING
+                    name: 'title',
+                    description: 'Title for the invite checker',
+                    required: false
+                },
+                {
+                    type: 3, // STRING
+                    name: 'description',
+                    description: 'Description for the invite checker',
                     required: false
                 }
             ]
@@ -177,6 +220,44 @@ async function handleSlashCommand(interaction) {
                 flags: [4096] // EPHEMERAL flag
             });
             console.log(`Reward claim setup by ${interaction.user.tag} in ${channel.name}`);
+        } catch (error) {
+            await interaction.reply({
+                content: '❌ I don\'t have permission to send messages to that channel.',
+                flags: [4096] // EPHEMERAL flag
+            });
+        }
+    }
+    
+    else if (commandName === 'invite-check') {
+        const channel = options.getChannel('channel') || interaction.channel;
+        const title = options.getString('title') || 'Invite Status Checker';
+        const description = options.getString('description') || 'Check your current invite count and eligibility status. Your results will be shown privately to you only.';
+        
+        // Check if user has admin permissions to setup invite checker
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return await interaction.reply({
+                content: '❌ You need Administrator permission to setup invite checkers.',
+                flags: [4096] // EPHEMERAL flag
+            });
+        }
+        
+        // Create embed and button
+        const embed = createInviteCheckEmbed(title, description, interaction.member);
+        const button = new ButtonBuilder()
+            .setCustomId('check_invites')
+            .setLabel('Check My Invites')
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji('📊');
+        
+        const row = new ActionRowBuilder().addComponents(button);
+        
+        try {
+            await channel.send({ embeds: [embed], components: [row] });
+            await interaction.reply({
+                content: `✅ Invite checker setup in ${channel}`,
+                flags: [4096] // EPHEMERAL flag
+            });
+            console.log(`Invite checker setup by ${interaction.user.tag} in ${channel.name}`);
         } catch (error) {
             await interaction.reply({
                 content: '❌ I don\'t have permission to send messages to that channel.',
@@ -292,6 +373,82 @@ async function handleButtonInteraction(interaction) {
                 flags: [4096] // EPHEMERAL flag
             });
         }
+    }
+    
+    else if (customId === 'check_invites') {
+        // Check if user has the required role (representing 1 invite)
+        const hasInviteRole = hasRequiredRole(interaction.member);
+        const inviteCount = hasInviteRole ? 1 : 0;
+        
+        // Get role information for display
+        const requiredRole = interaction.guild.roles.cache.get(config.requiredRoleId);
+        const roleName = requiredRole ? requiredRole.name : 'Invite Role';
+        
+        // Create detailed invite status embed
+        const statusEmbed = new EmbedBuilder()
+            .setTitle('📊 Your Invite Status')
+            .setColor(hasInviteRole ? 0x00FF00 : 0xFF6B6B) // Green if has invite, red if not
+            .addFields(
+                { 
+                    name: '👤 User', 
+                    value: interaction.member.toString(), 
+                    inline: true 
+                },
+                { 
+                    name: '📈 Current Invites', 
+                    value: `**${inviteCount}** ${inviteCount === 1 ? 'invite' : 'invites'}`, 
+                    inline: true 
+                },
+                { 
+                    name: '🎯 Status', 
+                    value: hasInviteRole ? '✅ **Eligible**' : '❌ **Not Eligible**', 
+                    inline: true 
+                }
+            );
+        
+        if (hasInviteRole) {
+            statusEmbed.setDescription(`🎉 Great job! You have **1 invite** and are eligible for rewards.`);
+            statusEmbed.addFields(
+                {
+                    name: '🏆 Eligibility',
+                    value: `✅ You have the **${roleName}** role\n✅ You meet the minimum requirement (1 invite)\n✅ You can claim available rewards`,
+                    inline: false
+                },
+                {
+                    name: '🎁 What You Can Do',
+                    value: '• Claim exclusive rewards\n• Access premium features\n• Join special channels',
+                    inline: false
+                }
+            );
+        } else {
+            statusEmbed.setDescription(`😔 You currently have **0 invites** and need 1 invite to unlock rewards.`);
+            statusEmbed.addFields(
+                {
+                    name: '📋 Requirements',
+                    value: `❌ You need the **${roleName}** role\n❌ You need at least 1 invite\n❌ Cannot claim rewards yet`,
+                    inline: false
+                },
+                {
+                    name: '💡 How to Get Invites',
+                    value: '• Invite friends to the server\n• Share the server link\n• Help grow our community\n• Contact admins if you think this is wrong',
+                    inline: false
+                }
+            );
+        }
+        
+        statusEmbed.setFooter({ 
+            text: `Checked on ${interaction.guild.name} • Results are private to you`, 
+            iconURL: interaction.member.displayAvatarURL() 
+        });
+        statusEmbed.setTimestamp();
+        
+        // Send private response
+        await interaction.reply({
+            embeds: [statusEmbed],
+            flags: [4096] // EPHEMERAL flag
+        });
+        
+        console.log(`Invite check performed by ${interaction.user.tag}: ${inviteCount} invite(s)`);
     }
     
     else if (customId.startsWith('verify_claim_')) {
