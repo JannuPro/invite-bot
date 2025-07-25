@@ -352,62 +352,12 @@ async function handleButtonInteraction(interaction) {
         const requiredRole = interaction.guild.roles.cache.get(config.requiredRoleId);
         const roleName = requiredRole ? requiredRole.name : 'Invite Role';
         
-        // Create detailed invite status embed
+        // Create simple invite status response
         const statusEmbed = new EmbedBuilder()
-            .setTitle('📊 Your Invite Status')
-            .setColor(hasInviteRole ? 0x00FF00 : 0xFF6B6B) // Green if has invite, red if not
-            .addFields(
-                { 
-                    name: '👤 User', 
-                    value: interaction.member.toString(), 
-                    inline: true 
-                },
-                { 
-                    name: '📈 Current Invites', 
-                    value: `**${inviteCount}** ${inviteCount === 1 ? 'invite' : 'invites'}`, 
-                    inline: true 
-                },
-                { 
-                    name: '🎯 Status', 
-                    value: hasInviteRole ? '✅ **Eligible**' : '❌ **Not Eligible**', 
-                    inline: true 
-                }
-            );
-        
-        if (hasInviteRole) {
-            statusEmbed.setDescription(`🎉 Great job! You have **1 invite** and are eligible for rewards.`);
-            statusEmbed.addFields(
-                {
-                    name: '🏆 Eligibility',
-                    value: `✅ You have the **${roleName}** role\n✅ You meet the minimum requirement (1 invite)\n✅ You can claim available rewards`,
-                    inline: false
-                },
-                {
-                    name: '🎁 What You Can Do',
-                    value: '• Claim exclusive rewards\n• Access premium features\n• Join special channels',
-                    inline: false
-                }
-            );
-        } else {
-            statusEmbed.setDescription(`😔 You currently have **0 invites** and need 1 invite to unlock rewards.`);
-            statusEmbed.addFields(
-                {
-                    name: '📋 Requirements',
-                    value: `❌ You need the **${roleName}** role\n❌ You need at least 1 invite\n❌ Cannot claim rewards yet`,
-                    inline: false
-                },
-                {
-                    name: '💡 How to Get Invites',
-                    value: '• Invite friends to the server\n• Share the server link\n• Help grow our community\n• Contact admins if you think this is wrong',
-                    inline: false
-                }
-            );
-        }
-        
-        statusEmbed.setFooter({ 
-            text: 'Results are private to you' 
-        });
-        statusEmbed.setTimestamp();
+            .setTitle('📊 Your Invite Count')
+            .setDescription(`You currently have **${inviteCount}** ${inviteCount === 1 ? 'invite' : 'invites'}.`)
+            .setColor(0x5865F2)
+            .setTimestamp();
         
         // Send private response
         await interaction.reply({
