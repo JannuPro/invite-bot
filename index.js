@@ -1,4 +1,5 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, ChannelType } = require('discord.js');
+const InviteTracker = require('./inviteTracker.js');
 require('dotenv').config();
 
 // Create Discord client
@@ -9,6 +10,8 @@ const client = new Client({
     ]
 });
 
+const inviteTracker = new InviteTracker(client);
+
 // Configuration
 const config = {
     requiredRoleId: '1398018785461538878', // Role required to claim rewards
@@ -17,17 +20,18 @@ const config = {
     threadTimeout: 300000    // 5 minutes
 };
 
-// Permission checker functions
-function hasRequiredRole(member) {
-    return member.roles.cache.has(config.requiredRoleId);
+// Permission checker functions - Updated to use invite count instead of roles
+async function hasRequiredInvites(member, requiredCount = 1) {
+    const user = await inviteTracker.getUser(member.user.id);
+    return user ? user.total_invites >= requiredCount : false;
 }
 
 function hasVerifiedRole(member) {
     return member.roles.cache.has(config.verifiedRoleId);
 }
 
-function canClaimReward(member) {
-    return hasRequiredRole(member);
+async function canClaimReward(member) {
+    return await hasRequiredInvites(member, 1);
 }
 
 function canVerifyInThread(member) {
@@ -75,6 +79,10 @@ function createErrorEmbed(title, description) {
 client.once('ready', async () => {
     console.log(`✅ Bot is ready! Logged in as ${client.user.tag}`);
     console.log(`📊 Bot is in ${client.guilds.cache.size} guilds`);
+    
+    // Initialize invite tracker
+    await inviteTracker.init();
+    console.log('📈 Invite tracker initialized');
     
     // Set bot status
     client.user.setActivity('for reward claims', { type: 'WATCHING' });
@@ -132,6 +140,54 @@ client.once('ready', async () => {
         {
             name: 'reward-status',
             description: 'Check reward system status'
+        },
+        {
+            name: 'invite-leaderboard',
+            description: 'Show the invite leaderboard',
+            options: [
+                {
+                    type: 4, // INTEGER
+                    name: 'limit',
+                    description: 'Number of users to show (default: 10)',
+                    required: false
+                }
+            ]
+        },
+        {
+            name: 'add-bonus-invites',
+            description: 'Add bonus invites to a user (Admin only)',
+            options: [
+                {
+                    type: 6, // USER
+                    name: 'user',
+                    description: 'The user to give bonus invites to',
+                    required: true
+                },
+                {
+                    type: 4, // INTEGER
+                    name: 'amount',
+                    description: 'Number of bonus invites to add',
+                    required: true
+                }
+            ]
+        },
+        {
+            name: 'credit-invite',
+            description: 'Credit a regular invite to a user (Admin only)',
+            options: [
+                {
+                    type: 6, // USER
+                    name: 'inviter',
+                    description: 'The user who invited someone',
+                    required: true
+                },
+                {
+                    type: 6, // USER
+                    name: 'invited',
+                    description: 'The user who was invited',
+                    required: true
+                }
+            ]
         }
     ];
     
@@ -270,6 +326,162 @@ async function handleSlashCommand(interaction) {
         
         await interaction.reply({ embeds: [embed], flags: [4096] });
     }
+    
+    else if (commandName === 'invite-leaderboard') {
+        const limit = options.getInteger('limit') || 10;
+        
+        try {
+            const leaderboard = await inviteTracker.getLeaderboard(interaction.guild.id, limit);
+            
+            if (leaderboard.length === 0) {
+                return await interaction.reply({
+                    content: '❌ No invite data found yet.',
+                    flags: [4096]
+                });
+            }
+            
+            const embed = new EmbedBuilder()
+                .setTitle('🏆 Invite Leaderboard')
+                .setDescription(`Top ${leaderboard.length} members by invite count`)
+                .setColor(0x5865F2)
+                .setTimestamp();
+            
+            const leaderboardText = leaderboard.map((user, index) => {
+                const position = index + 1;
+                const medal = position <= 3 ? ['🥇', '🥈', '🥉'][position - 1] : `#${position}`;
+                return `${medal} **${user.username}** - ${user.total_invites} invites (${user.regular_invites} regular)`;
+            }).join('\n');
+            
+            embed.setDescription(`Top ${leaderboard.length} members by invite count\n\n${leaderboardText}`);
+            
+            await interaction.reply({ embeds: [embed], flags: [4096] });
+        } catch (error) {
+            console.error('Error fetching leaderboard:', error);
+            await interaction.reply({
+                content: '❌ Failed to fetch invite leaderboard.',
+                flags: [4096]
+            });
+        }
+    }
+    
+    else if (commandName === 'add-bonus-invites') {
+        // Check if user has admin permissions
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return await interaction.reply({
+                content: '❌ You need Administrator permission to add bonus invites.',
+                flags: [4096]
+            });
+        }
+        
+        const targetUser = options.getUser('user');
+        const amount = options.getInteger('amount');
+        
+        if (amount <= 0) {
+            return await interaction.reply({
+                content: '❌ Amount must be a positive number.',
+                flags: [4096]
+            });
+        }
+        
+        try {
+            // Ensure user exists in database
+            let user = await inviteTracker.getUser(targetUser.id);
+            if (!user) {
+                user = await inviteTracker.createUser(targetUser.id, targetUser.username, targetUser.displayName, targetUser.createdAt);
+            }
+            
+            // Add bonus invites
+            const updatedUser = await inviteTracker.addBonusInvites(targetUser.id, amount);
+            
+            const embed = new EmbedBuilder()
+                .setTitle('✅ Bonus Invites Added')
+                .setDescription(`Successfully added **${amount}** bonus invites to ${targetUser}`)
+                .setColor(0x00FF00)
+                .addFields([
+                    { name: 'Previous Total', value: `${updatedUser.total_invites - amount}`, inline: true },
+                    { name: 'Bonus Added', value: `${amount}`, inline: true },
+                    { name: 'New Total', value: `${updatedUser.total_invites}`, inline: true }
+                ])
+                .setTimestamp();
+            
+            await interaction.reply({ embeds: [embed], flags: [4096] });
+            
+            // Check for role rewards after adding bonus invites
+            await inviteTracker.checkRoleRewards(interaction.guild, targetUser.id);
+            
+            console.log(`${amount} bonus invites added to ${targetUser.tag} by ${interaction.user.tag}`);
+        } catch (error) {
+            console.error('Error adding bonus invites:', error);
+            await interaction.reply({
+                content: '❌ Failed to add bonus invites.',
+                flags: [4096]
+            });
+        }
+    }
+    
+    else if (commandName === 'credit-invite') {
+        // Check if user has admin permissions
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return await interaction.reply({
+                content: '❌ You need Administrator permission to credit invites.',
+                flags: [4096]
+            });
+        }
+        
+        const inviterUser = options.getUser('inviter');
+        const invitedUser = options.getUser('invited');
+        
+        if (inviterUser.id === invitedUser.id) {
+            return await interaction.reply({
+                content: '❌ A user cannot invite themselves.',
+                flags: [4096]
+            });
+        }
+        
+        try {
+            // Ensure inviter exists in database
+            let inviter = await inviteTracker.getUser(inviterUser.id);
+            if (!inviter) {
+                inviter = await inviteTracker.createUser(inviterUser.id, inviterUser.username, inviterUser.displayName, inviterUser.createdAt);
+            }
+            
+            // Ensure invited user exists in database
+            let invited = await inviteTracker.getUser(invitedUser.id);
+            if (!invited) {
+                invited = await inviteTracker.createUser(invitedUser.id, invitedUser.username, invitedUser.displayName, invitedUser.createdAt);
+            }
+            
+            // Add invite record
+            await inviteTracker.addInvite(inviterUser.id, invitedUser.id, invitedUser.username, 'manual');
+            
+            // Add regular invite
+            const updatedInviter = await inviteTracker.updateUserInvites(inviterUser.id, 1, 0, 0, 0);
+            
+            const embed = new EmbedBuilder()
+                .setTitle('✅ Invite Credited')
+                .setDescription(`Successfully credited 1 invite to ${inviterUser} for inviting ${invitedUser}`)
+                .setColor(0x00FF00)
+                .addFields([
+                    { name: 'Inviter', value: `${inviterUser}`, inline: true },
+                    { name: 'Invited User', value: `${invitedUser}`, inline: true },
+                    { name: 'New Total', value: `${updatedInviter.total_invites} invites`, inline: true }
+                ])
+                .setTimestamp();
+            
+            await interaction.reply({ embeds: [embed], flags: [4096] });
+            
+            // Check for role rewards after crediting invite
+            await inviteTracker.checkRoleRewards(interaction.guild, inviterUser.id);
+            
+            console.log(`Manual invite credited: ${inviterUser.tag} invited ${invitedUser.tag} (by ${interaction.user.tag})`);
+        } catch (error) {
+            console.error('Error crediting invite:', error);
+            await interaction.reply({
+                content: '❌ Failed to credit invite.',
+                flags: [4096]
+            });
+        }
+    }
 }
 
 // Handle button interactions
@@ -277,13 +489,11 @@ async function handleButtonInteraction(interaction) {
     const { customId } = interaction;
     
     if (customId === 'claim_reward') {
-        // Check if user has required role to claim rewards
-        if (!canClaimReward(interaction.member)) {
-            const requiredRole = interaction.guild.roles.cache.get(config.requiredRoleId);
-            const roleName = requiredRole ? requiredRole.name : 'Required Role';
-            
+        // Check if user has required invites to claim rewards
+        const userCanClaim = await canClaimReward(interaction.member);
+        if (!userCanClaim) {
             return await interaction.reply({
-                content: `❌ You need the **${roleName}** role to claim rewards. Please get this role first and try again.`,
+                content: `❌ You need at least 1 invite to claim rewards. Invite friends to this server and try again.`,
                 flags: [4096]
             });
         }
@@ -344,22 +554,32 @@ async function handleButtonInteraction(interaction) {
     }
     
     else if (customId === 'check_invites') {
-        // Check if user has the required role (representing 1 invite)
-        const hasInviteRole = hasRequiredRole(interaction.member);
-        const inviteCount = hasInviteRole ? 1 : 0;
-        
-        // Get role information for display
-        const requiredRole = interaction.guild.roles.cache.get(config.requiredRoleId);
-        const roleName = requiredRole ? requiredRole.name : 'Invite Role';
-        
-        // Create simple invite breakdown response
-        const regularInvites = hasInviteRole ? 1 : 0;
+        // Get user's actual invite count from database
+        const user = await inviteTracker.getUser(interaction.user.id);
+        const totalInvites = user ? user.total_invites : 0;
+        const regularInvites = user ? user.regular_invites : 0;
+        const bonusInvites = user ? user.bonus_invites : 0;
+        const leftInvites = user ? user.left_invites : 0;
+        const fakeInvites = user ? user.fake_invites : 0;
         
         const statusEmbed = new EmbedBuilder()
             .setTitle('📊 Your Invite Count')
-            .setDescription(`You currently have **${inviteCount}** ${inviteCount === 1 ? 'invite' : 'invites'}. (${regularInvites} regular)`)
+            .setDescription(`You currently have **${totalInvites}** ${totalInvites === 1 ? 'invite' : 'invites'}. (${regularInvites} regular)`)
             .setColor(0x5865F2)
+            .addFields([
+                { name: '✅ Regular Invites', value: `${regularInvites}`, inline: true },
+                { name: '🎁 Bonus Invites', value: `${bonusInvites}`, inline: true },
+                { name: '📊 Total Invites', value: `${totalInvites}`, inline: true }
+            ])
             .setTimestamp();
+
+        if (leftInvites > 0 || fakeInvites > 0) {
+            statusEmbed.addFields([
+                { name: '👋 Left Server', value: `${leftInvites}`, inline: true },
+                { name: '❌ Invalid (New Account)', value: `${fakeInvites}`, inline: true },
+                { name: '\u200B', value: '\u200B', inline: true }
+            ]);
+        }
         
         // Send private response
         await interaction.reply({
@@ -367,7 +587,7 @@ async function handleButtonInteraction(interaction) {
             flags: [4096]
         });
         
-        console.log(`Invite check performed by ${interaction.user.tag}: ${inviteCount} invite(s)`);
+        console.log(`Invite check performed by ${interaction.user.tag}: ${totalInvites} invite(s)`);
     }
     
     else if (customId.startsWith('start_verification_')) {
@@ -405,10 +625,10 @@ async function handleButtonInteraction(interaction) {
             });
         }
         
-        // Check if user has enough invites to bypass (currently checking for 1 invite, you mentioned you'll change to 2 later)
-        const hasInviteRole = hasRequiredRole(interaction.member);
-        const inviteCount = hasInviteRole ? 1 : 0;
-        const requiredInvites = 2; // This is what you mentioned you'll change to
+        // Check if user has enough invites to bypass verification
+        const user = await inviteTracker.getUser(interaction.user.id);
+        const inviteCount = user ? user.total_invites : 0;
+        const requiredInvites = 2;
         
         const bypassEmbed = new EmbedBuilder()
             .setTitle('⚡ Invite Bypass Check')
@@ -638,6 +858,9 @@ async function handleButtonInteraction(interaction) {
         }
     }
 }
+
+// Note: Member join/leave events disabled due to privileged intent requirements
+// Use manual invite tracking with /credit-invite command instead
 
 // Error handling
 client.on('error', error => {

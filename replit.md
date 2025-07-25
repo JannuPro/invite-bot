@@ -1,12 +1,14 @@
-# Discord Workflow Bot
+# Discord 10K Robux Giveaway Bot
 
 ## Overview
 
-This is a Discord bot that implements a role-based reward claiming system with interactive embeds, button interactions, private thread management, and exclusive channel creation. The bot uses Discord.js v14 with slash commands and provides a private reward claiming process for Discord servers.
+This is a sophisticated Discord bot for managing a 10K Robux giveaway system with comprehensive invite tracking, verification processes, and reward claiming. The bot features a blue Discord theme, PostgreSQL database integration for persistent invite tracking, private thread workflows, and external verification with invite-based bypass options.
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+Design theme: Blue Discord color scheme (#5865F2) throughout all embeds
+Privacy requirement: All interactions must remain private/ephemeral to users only
 
 ## System Architecture
 
