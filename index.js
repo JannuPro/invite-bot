@@ -41,16 +41,13 @@ function createRewardEmbed(title, description, initiator) {
         .setDescription(description)
         .setColor(0xFFD700) // Gold color for rewards
         .addFields(
-            { name: 'Reward Available For', value: initiator.toString(), inline: true },
-            { name: 'Server', value: initiator.guild.name, inline: true },
-            { name: 'Status', value: '🟡 Ready to claim', inline: true },
             {
                 name: '📋 Requirements',
-                value: '1. Must have required role to claim\n2. Need 1 invite to unlock reward\n3. Complete verification in private thread',
+                value: '• Must have required role to claim\n• Need 1 invite to unlock reward\n• Complete verification in private thread',
                 inline: false
             }
         )
-        .setFooter({ text: 'Click the button below to claim your reward', iconURL: initiator.displayAvatarURL() })
+        .setFooter({ text: 'Click the button below to claim your reward' })
         .setTimestamp();
 }
 
@@ -60,16 +57,13 @@ function createInviteCheckEmbed(title, description, initiator) {
         .setDescription(description)
         .setColor(0x00BFFF) // Deep sky blue for invite checking
         .addFields(
-            { name: 'Invite Checker', value: 'Check your current invite status', inline: true },
-            { name: 'Server', value: initiator.guild.name, inline: true },
-            { name: 'Status', value: '🔍 Ready to check', inline: true },
             {
                 name: '📋 Information',
                 value: '• Click the button to check your invite count\n• Results are shown privately to you only\n• Invite count determines your eligibility for rewards',
                 inline: false
             }
         )
-        .setFooter({ text: 'Click the button below to check your invites', iconURL: initiator.displayAvatarURL() })
+        .setFooter({ text: 'Click the button below to check your invites' })
         .setTimestamp();
 }
 
@@ -199,7 +193,7 @@ async function handleSlashCommand(interaction) {
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return await interaction.reply({
                 content: '❌ You need Administrator permission to setup reward claims.',
-                flags: [4096] // EPHEMERAL flag
+                ephemeral: true
             });
         }
         
@@ -217,13 +211,13 @@ async function handleSlashCommand(interaction) {
             await channel.send({ embeds: [embed], components: [row] });
             await interaction.reply({
                 content: `✅ Reward claim system setup in ${channel}`,
-                flags: [4096] // EPHEMERAL flag
+                ephemeral: true
             });
             console.log(`Reward claim setup by ${interaction.user.tag} in ${channel.name}`);
         } catch (error) {
             await interaction.reply({
                 content: '❌ I don\'t have permission to send messages to that channel.',
-                flags: [4096] // EPHEMERAL flag
+                ephemeral: true
             });
         }
     }
@@ -237,7 +231,7 @@ async function handleSlashCommand(interaction) {
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return await interaction.reply({
                 content: '❌ You need Administrator permission to setup invite checkers.',
-                flags: [4096] // EPHEMERAL flag
+                ephemeral: true
             });
         }
         
@@ -255,13 +249,13 @@ async function handleSlashCommand(interaction) {
             await channel.send({ embeds: [embed], components: [row] });
             await interaction.reply({
                 content: `✅ Invite checker setup in ${channel}`,
-                flags: [4096] // EPHEMERAL flag
+                ephemeral: true
             });
             console.log(`Invite checker setup by ${interaction.user.tag} in ${channel.name}`);
         } catch (error) {
             await interaction.reply({
                 content: '❌ I don\'t have permission to send messages to that channel.',
-                flags: [4096] // EPHEMERAL flag
+                ephemeral: true
             });
         }
     }
@@ -304,7 +298,7 @@ async function handleButtonInteraction(interaction) {
             
             return await interaction.reply({
                 content: `❌ You need the **${roleName}** role to claim rewards. Please get this role first and try again.`,
-                flags: [4096] // EPHEMERAL flag
+                ephemeral: true
             });
         }
         
@@ -360,8 +354,8 @@ async function handleButtonInteraction(interaction) {
             await thread.send({ embeds: [welcomeEmbed], components: [verifyRow] });
             
             await interaction.reply({
-                content: `✅ Private reward claim thread created. Check your private thread to continue.`,
-                flags: [4096] // EPHEMERAL flag
+                content: `✅ Private thread created. Check your private thread to continue.`,
+                ephemeral: true
             });
             
             console.log(`Private reward claim thread created by ${interaction.user.tag} in ${interaction.guild.name}`);
@@ -370,7 +364,7 @@ async function handleButtonInteraction(interaction) {
             console.error('Error creating private thread:', error);
             await interaction.reply({
                 content: '❌ I don\'t have permission to create private threads in this channel.',
-                flags: [4096] // EPHEMERAL flag
+                ephemeral: true
             });
         }
     }
@@ -437,15 +431,14 @@ async function handleButtonInteraction(interaction) {
         }
         
         statusEmbed.setFooter({ 
-            text: `Checked on ${interaction.guild.name} • Results are private to you`, 
-            iconURL: interaction.member.displayAvatarURL() 
+            text: 'Results are private to you' 
         });
         statusEmbed.setTimestamp();
         
         // Send private response
         await interaction.reply({
             embeds: [statusEmbed],
-            flags: [4096] // EPHEMERAL flag
+            ephemeral: true
         });
         
         console.log(`Invite check performed by ${interaction.user.tag}: ${inviteCount} invite(s)`);
@@ -457,7 +450,7 @@ async function handleButtonInteraction(interaction) {
         if (interaction.user.id !== userId) {
             return await interaction.reply({
                 content: '❌ Only the reward claimer can complete verification.',
-                flags: [4096] // EPHEMERAL flag
+                ephemeral: true
             });
         }
         
@@ -468,7 +461,7 @@ async function handleButtonInteraction(interaction) {
             
             return await interaction.reply({
                 content: `❌ You need the **${roleName}** role to complete verification. Please get verified first and try again.`,
-                flags: [4096] // EPHEMERAL flag
+                ephemeral: true
             });
         }
         
@@ -511,7 +504,7 @@ async function handleButtonInteraction(interaction) {
         if (interaction.user.id !== userId) {
             return await interaction.reply({
                 content: '❌ Only the reward claimer can cancel this claim.',
-                flags: [4096] // EPHEMERAL flag
+                ephemeral: true
             });
         }
         
@@ -542,7 +535,7 @@ async function handleButtonInteraction(interaction) {
         if (interaction.user.id !== userId) {
             return await interaction.reply({
                 content: '❌ Only the reward claimer can claim the final reward.',
-                flags: [4096] // EPHEMERAL flag
+                ephemeral: true
             });
         }
         
@@ -641,7 +634,7 @@ async function handleButtonInteraction(interaction) {
             console.error('Error creating reward channel:', error);
             await interaction.reply({
                 content: '❌ I don\'t have permission to create channels in this server.',
-                flags: [4096] // EPHEMERAL flag
+                ephemeral: true
             });
         }
     }
