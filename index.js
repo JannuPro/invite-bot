@@ -352,15 +352,12 @@ async function handleButtonInteraction(interaction) {
         const requiredRole = interaction.guild.roles.cache.get(config.requiredRoleId);
         const roleName = requiredRole ? requiredRole.name : 'Invite Role';
         
-        // Create detailed invite breakdown response
+        // Create simple invite breakdown response
         const regularInvites = hasInviteRole ? 1 : 0;
-        const leftInvites = 0;
-        const fakeInvites = 0;
-        const bonusInvites = 0;
         
         const statusEmbed = new EmbedBuilder()
             .setTitle('📊 Your Invite Count')
-            .setDescription(`You currently have **${inviteCount}** ${inviteCount === 1 ? 'invite' : 'invites'}. (${regularInvites} regular, ${leftInvites} left, ${fakeInvites} fake, ${bonusInvites} bonus)`)
+            .setDescription(`You currently have **${inviteCount}** ${inviteCount === 1 ? 'invite' : 'invites'}. (${regularInvites} regular)`)
             .setColor(0x5865F2)
             .setTimestamp();
         
