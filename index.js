@@ -49,7 +49,7 @@ function createInviteCheckEmbed(title, description, initiator) {
         .setTitle(`📊 ${title || 'Track Invites'}`)
         .setDescription(`• Click the button **below** to check your invites.\n• For your **invites** to count, your friends must join and stay in the **server**.`)
         .setColor(0x5865F2) // Discord blue color
-        .setFooter({ text: '' })
+        .setFooter({ text: 'Click the button below to check your invites' })
         .setTimestamp();
 }
 
@@ -159,9 +159,9 @@ client.on('interactionCreate', async (interaction) => {
         const errorMessage = 'An error occurred while processing your request.';
         
         if (interaction.replied || interaction.deferred) {
-            await interaction.followUp({ content: `❌ ${errorMessage}`, ephemeral: true });
+            await interaction.followUp({ content: `❌ ${errorMessage}`, flags: [4096] });
         } else {
-            await interaction.reply({ content: `❌ ${errorMessage}`, ephemeral: true });
+            await interaction.reply({ content: `❌ ${errorMessage}`, flags: [4096] });
         }
     }
 });
@@ -179,7 +179,7 @@ async function handleSlashCommand(interaction) {
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return await interaction.reply({
                 content: '❌ You need Administrator permission to setup reward claims.',
-                ephemeral: true
+                flags: [4096]
             });
         }
         
@@ -197,13 +197,13 @@ async function handleSlashCommand(interaction) {
             await channel.send({ embeds: [embed], components: [row] });
             await interaction.reply({
                 content: `✅ 10K Robux giveaway setup in ${channel}`,
-                ephemeral: true
+                flags: [4096]
             });
             console.log(`Reward claim setup by ${interaction.user.tag} in ${channel.name}`);
         } catch (error) {
             await interaction.reply({
                 content: '❌ I don\'t have permission to send messages to that channel.',
-                ephemeral: true
+                flags: [4096]
             });
         }
     }
@@ -217,7 +217,7 @@ async function handleSlashCommand(interaction) {
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return await interaction.reply({
                 content: '❌ You need Administrator permission to setup invite checkers.',
-                ephemeral: true
+                flags: [4096]
             });
         }
         
@@ -235,13 +235,13 @@ async function handleSlashCommand(interaction) {
             await channel.send({ embeds: [embed], components: [row] });
             await interaction.reply({
                 content: `✅ Invite checker setup in ${channel}`,
-                ephemeral: true
+                flags: [4096]
             });
             console.log(`Invite checker setup by ${interaction.user.tag} in ${channel.name}`);
         } catch (error) {
             await interaction.reply({
                 content: '❌ I don\'t have permission to send messages to that channel.',
-                ephemeral: true
+                flags: [4096]
             });
         }
     }
@@ -284,7 +284,7 @@ async function handleButtonInteraction(interaction) {
             
             return await interaction.reply({
                 content: `❌ You need the **${roleName}** role to claim rewards. Please get this role first and try again.`,
-                ephemeral: true
+                flags: [4096]
             });
         }
         
@@ -329,7 +329,7 @@ async function handleButtonInteraction(interaction) {
             
             await interaction.reply({
                 content: `✅ Private thread created. Check your private thread to continue.`,
-                ephemeral: true
+                flags: [4096]
             });
             
             console.log(`Private reward claim thread created by ${interaction.user.tag} in ${interaction.guild.name}`);
@@ -338,7 +338,7 @@ async function handleButtonInteraction(interaction) {
             console.error('Error creating private thread:', error);
             await interaction.reply({
                 content: '❌ I don\'t have permission to create private threads in this channel.',
-                ephemeral: true
+                flags: [4096]
             });
         }
     }
@@ -412,7 +412,7 @@ async function handleButtonInteraction(interaction) {
         // Send private response
         await interaction.reply({
             embeds: [statusEmbed],
-            ephemeral: true
+            flags: [4096]
         });
         
         console.log(`Invite check performed by ${interaction.user.tag}: ${inviteCount} invite(s)`);
@@ -424,7 +424,7 @@ async function handleButtonInteraction(interaction) {
         if (interaction.user.id !== userId) {
             return await interaction.reply({
                 content: '❌ Only the reward claimer can complete verification.',
-                ephemeral: true
+                flags: [4096]
             });
         }
         
@@ -435,7 +435,7 @@ async function handleButtonInteraction(interaction) {
             
             return await interaction.reply({
                 content: `❌ You need the **${roleName}** role to complete verification. Please get verified first and try again.`,
-                ephemeral: true
+                flags: [4096]
             });
         }
         
@@ -478,7 +478,7 @@ async function handleButtonInteraction(interaction) {
         if (interaction.user.id !== userId) {
             return await interaction.reply({
                 content: '❌ Only the reward claimer can cancel this claim.',
-                ephemeral: true
+                flags: [4096]
             });
         }
         
@@ -509,7 +509,7 @@ async function handleButtonInteraction(interaction) {
         if (interaction.user.id !== userId) {
             return await interaction.reply({
                 content: '❌ Only the reward claimer can claim the final reward.',
-                ephemeral: true
+                flags: [4096]
             });
         }
         
@@ -608,7 +608,7 @@ async function handleButtonInteraction(interaction) {
             console.error('Error creating reward channel:', error);
             await interaction.reply({
                 content: '❌ I don\'t have permission to create channels in this server.',
-                ephemeral: true
+                flags: [4096]
             });
         }
     }
