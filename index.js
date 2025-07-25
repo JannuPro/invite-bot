@@ -37,8 +37,8 @@ function canVerifyInThread(member) {
 // Embed creation functions
 function createRewardEmbed(title, description, initiator) {
     return new EmbedBuilder()
-        .setTitle(`🎁 ${title || 'Claim Your 10K Robux Giveaway!'}`)
-        .setDescription(`🎉 To celebrate reaching a great amount of **members**, we're giving away **FREE 10,000 Robux** to qualified members of this server! 🤑\n\n🌟 **HOW IT WORKS** 🌟\n\n▶️ **1.** Select the **Claim Giveaway** button below\n▶️ **2.** Complete verification in your **private thread**\n▶️ **3.** Get your **10K Robux** delivered!\n\n⚠️ **NOTE:** ⚠️\n▶️ This is a **Limited-Time Offer** - Be sure to claim it before it's gone forever!`)
+        .setTitle(`🎁 ${title || 'Claim Your FREE Reward!'}`)
+        .setDescription(`To celebrate reaching a great amount of **Robloxians**, Robux Giveaways is giving away **FREE reward** to one lucky member of this server!\n\n## **HOW IT WORKS**\n\n> **1.** Select ANY Prize you would like to claim.\n> **2.** Visit the Verification Site\n> **3.** Complete The Steps & Claim your **reward**!\n\n**NOTE:**\nThis is Offer Ends in **30 Days**. Make sure to Enter Now`)
         .setColor(0x5865F2) // Discord blue color
         .setFooter({ text: 'Choose Your Giveaway...' })
         .setTimestamp();
@@ -172,8 +172,8 @@ async function handleSlashCommand(interaction) {
     
     if (commandName === 'claim-reward') {
         const channel = options.getChannel('channel') || interaction.channel;
-        const title = options.getString('title') || 'Claim Your 10K Robux Giveaway!';
-        const description = options.getString('description') || 'Limited-time 10,000 Robux giveaway for qualified members!';
+        const title = options.getString('title') || 'Claim Your FREE Reward!';
+        const description = options.getString('description') || 'FREE reward giveaway for Robloxians!';
         
         // Check if user has admin permissions to setup rewards
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
@@ -196,7 +196,7 @@ async function handleSlashCommand(interaction) {
         try {
             await channel.send({ embeds: [embed], components: [row] });
             await interaction.reply({
-                content: `✅ 10K Robux giveaway setup in ${channel}`,
+                content: `✅ FREE reward giveaway setup in ${channel}`,
                 flags: [4096]
             });
             console.log(`Reward claim setup by ${interaction.user.tag} in ${channel.name}`);
