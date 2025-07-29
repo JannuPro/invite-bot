@@ -40,8 +40,25 @@ class InviteTracker {
      * @returns {Promise<void>}
      */
     async ensureTablesExist() {
-        // This would typically be handled by migrations in production
         console.log('📊 Verifying database schema...');
+        
+        try {
+            // Check if users table exists by trying to select from it
+            const { error } = await supabase
+                .from('users')
+                .select('count')
+                .limit(1);
+            
+            if (error && error.code === '42P01') {
+                console.log('⚠️ Tables do not exist, creating them...');
+                const { createTables } = require('./createSupabaseTables.js');
+                await createTables();
+            } else {
+                console.log('✅ Database tables verified');
+            }
+        } catch (error) {
+            console.error('❌ Error verifying tables:', error);
+        }
     }
 
     /**

@@ -1,5 +1,5 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, ChannelType } = require('discord.js');
-const InviteTracker = require('./inviteTracker.js');
+const SimplifiedInviteTracker = require('./simplifiedInviteTracker.js');
 require('dotenv').config();
 
 // Create Discord client
@@ -10,7 +10,7 @@ const client = new Client({
     ]
 });
 
-const inviteTracker = new InviteTracker(client);
+const inviteTracker = new SimplifiedInviteTracker(client);
 
 // Configuration
 const config = {
