@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
 const SimplifiedInviteTracker = require('./simplifiedInviteTracker.js');
 require('dotenv').config();
 
@@ -17,7 +17,20 @@ const config = {
     requiredRoleId: '1398018785461538878', // Role required to claim rewards
     verifiedRoleId: '1398018753542881520', // Verified role required in thread
     workflowTimeout: 600000, // 10 minutes
-    threadTimeout: 300000    // 5 minutes
+    threadTimeout: 300000,   // 5 minutes
+    claimsCategoryId: '1399823374921764904', // Category for reward claim channels
+    adminUserId: '1203727094138675341' // @jannueducates user ID
+};
+
+// Track user claim channels (userId -> channelCount)
+const userClaimChannels = new Map();
+
+// Reward configuration with invite requirements and skip costs
+const rewardConfig = {
+    3: { required: 3, skipCost: 2 },
+    6: { required: 6, skipCost: 3 },
+    9: { required: 9, skipCost: 3 },
+    12: { required: 12, skipCost: 4 }
 };
 
 // Permission checker functions - Updated to use invite count instead of roles
@@ -202,13 +215,15 @@ client.once('ready', async () => {
 
 // Slash command handler
 client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isCommand() && !interaction.isButton()) return;
+    if (!interaction.isCommand() && !interaction.isButton() && !interaction.isStringSelectMenu()) return;
     
     try {
         if (interaction.isCommand()) {
             await handleSlashCommand(interaction);
         } else if (interaction.isButton()) {
             await handleButtonInteraction(interaction);
+        } else if (interaction.isStringSelectMenu()) {
+            await handleSelectMenuInteraction(interaction);
         }
     } catch (error) {
         console.error('Error handling interaction:', error);
@@ -239,15 +254,40 @@ async function handleSlashCommand(interaction) {
             });
         }
         
-        // Create embed and button
+        // Create embed with dropdown menu
         const embed = createRewardEmbed(title, description, interaction.member);
-        const button = new ButtonBuilder()
-            .setCustomId('claim_reward')
-            .setLabel('Claim Giveaway')
-            .setStyle(ButtonStyle.Primary)
-            .setEmoji('🎁');
         
-        const row = new ActionRowBuilder().addComponents(button);
+        const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId('select_reward')
+            .setPlaceholder('Choose your reward amount...')
+            .addOptions([
+                {
+                    label: '3 Invites Reward',
+                    description: 'Claim reward for 3 invites',
+                    value: '3',
+                    emoji: '🎁'
+                },
+                {
+                    label: '6 Invites Reward',
+                    description: 'Claim reward for 6 invites',
+                    value: '6',
+                    emoji: '🎁'
+                },
+                {
+                    label: '9 Invites Reward',
+                    description: 'Claim reward for 9 invites',
+                    value: '9',
+                    emoji: '🎁'
+                },
+                {
+                    label: '12 Invites Reward',
+                    description: 'Claim reward for 12 invites',
+                    value: '12',
+                    emoji: '🎁'
+                }
+            ]);
+
+        const row = new ActionRowBuilder().addComponents(selectMenu);
         
         try {
             await channel.send({ embeds: [embed], components: [row] });
@@ -479,6 +519,139 @@ async function handleSlashCommand(interaction) {
             await interaction.reply({
                 content: '❌ Failed to credit invite.',
                 flags: [4096]
+            });
+        }
+    }
+}
+
+// Handle select menu interactions
+async function handleSelectMenuInteraction(interaction) {
+    console.log(`Select menu interaction: ${interaction.customId} by ${interaction.user.tag}`);
+
+    if (interaction.customId === 'select_reward') {
+        const selectedValue = parseInt(interaction.values[0]);
+        const rewardInfo = rewardConfig[selectedValue];
+        
+        if (!rewardInfo) {
+            return await interaction.reply({
+                content: '❌ Invalid reward selection.',
+                ephemeral: true
+            });
+        }
+
+        // Check if user has enough invites
+        const user = await inviteTracker.getUser(interaction.user.id);
+        const userInvites = user ? user.total_invites : 0;
+
+        if (userInvites < rewardInfo.required) {
+            return await interaction.reply({
+                content: `❌ You need **${rewardInfo.required} invites** to claim this reward. You currently have **${userInvites} invites**.`,
+                ephemeral: true
+            });
+        }
+
+        // Check if user already has 2 active channels
+        const userChannelCount = userClaimChannels.get(interaction.user.id) || 0;
+        if (userChannelCount >= 2) {
+            return await interaction.reply({
+                content: '❌ You can only have **2 active claim channels** at a time. Please close an existing channel first.',
+                ephemeral: true
+            });
+        }
+
+        try {
+            // Create private channel in the claims category
+            const category = interaction.guild.channels.cache.get(config.claimsCategoryId);
+            if (!category) {
+                return await interaction.reply({
+                    content: '❌ Claims category not found. Please contact an administrator.',
+                    ephemeral: true
+                });
+            }
+
+            const channelName = `${interaction.user.username}-${selectedValue}-invites`;
+            const claimChannel = await interaction.guild.channels.create({
+                name: channelName,
+                type: ChannelType.GuildText,
+                parent: category.id,
+                permissionOverwrites: [
+                    {
+                        id: interaction.guild.id,
+                        deny: [PermissionFlagsBits.ViewChannel]
+                    },
+                    {
+                        id: interaction.user.id,
+                        allow: [
+                            PermissionFlagsBits.ViewChannel,
+                            PermissionFlagsBits.SendMessages,
+                            PermissionFlagsBits.ReadMessageHistory
+                        ]
+                    },
+                    {
+                        id: config.adminUserId,
+                        allow: [
+                            PermissionFlagsBits.ViewChannel,
+                            PermissionFlagsBits.SendMessages,
+                            PermissionFlagsBits.ReadMessageHistory,
+                            PermissionFlagsBits.ManageChannels
+                        ]
+                    }
+                ]
+            });
+
+            // Update user channel count
+            userClaimChannels.set(interaction.user.id, userChannelCount + 1);
+
+            // Create queue embed and buttons
+            const queueEmbed = new EmbedBuilder()
+                .setTitle('🎁 Reward Claim Queue')
+                .setDescription(`**${interaction.user.username}**, you are currently in the queue for your **${selectedValue} invites reward**.
+
+**Queue Skip Option:**
+To skip the queue, you need **${rewardInfo.skipCost} additional invites** (total: ${rewardInfo.required + rewardInfo.skipCost} invites).
+
+**Current Status:** In Queue
+**Required Invites:** ${rewardInfo.required}
+**Your Invites:** ${userInvites}`)
+                .setColor(0x5865F2)
+                .setTimestamp();
+
+            const skipButton = new ButtonBuilder()
+                .setCustomId(`skip_queue_${selectedValue}`)
+                .setLabel(`Skip Queue (+${rewardInfo.skipCost} invites)`)
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('⚡');
+
+            const continueButton = new ButtonBuilder()
+                .setCustomId(`continue_claim_${selectedValue}`)
+                .setLabel('Continue in Queue')
+                .setStyle(ButtonStyle.Primary)
+                .setEmoji('⏳');
+
+            const closeButton = new ButtonBuilder()
+                .setCustomId('close_channel')
+                .setLabel('Close Channel')
+                .setStyle(ButtonStyle.Danger)
+                .setEmoji('🗑️');
+
+            const buttonRow = new ActionRowBuilder().addComponents(skipButton, continueButton, closeButton);
+
+            await claimChannel.send({
+                content: `${interaction.user}`,
+                embeds: [queueEmbed],
+                components: [buttonRow]
+            });
+
+            await interaction.reply({
+                content: `✅ Private claim channel created: ${claimChannel}`,
+                ephemeral: true
+            });
+
+        } catch (error) {
+            console.error('Error creating claim channel:', error);
+            await interaction.reply({
+                content: '❌ Failed to create claim channel. Please try again.',
+                ephemeral: true
             });
         }
     }
@@ -854,6 +1027,117 @@ async function handleButtonInteraction(interaction) {
             await interaction.reply({
                 content: '❌ I don\'t have permission to create channels in this server.',
                 flags: [4096]
+            });
+        }
+    }
+    
+    // Handle queue skip buttons
+    else if (customId.startsWith('skip_queue_')) {
+        const rewardAmount = parseInt(customId.split('_')[2]);
+        const rewardInfo = rewardConfig[rewardAmount];
+        const user = await inviteTracker.getUser(interaction.user.id);
+        const userInvites = user ? user.total_invites : 0;
+        const requiredForSkip = rewardInfo.required + rewardInfo.skipCost;
+
+        if (userInvites >= requiredForSkip) {
+            // Rename channel to quick-claims
+            await interaction.channel.setName(`quick-claims-${interaction.user.username}`);
+            
+            // Ping admin and proceed
+            const skipEmbed = new EmbedBuilder()
+                .setTitle('⚡ Queue Skipped!')
+                .setDescription(`**${interaction.user.username}** has skipped the queue with **${userInvites} invites**!
+
+<@${config.adminUserId}> - Please process this quick claim.
+
+**Reward Type:** ${rewardAmount} Invites Reward
+**User Invites:** ${userInvites}
+**Status:** Ready for Processing`)
+                .setColor(0x00FF00)
+                .setTimestamp();
+
+            const closeButton = new ButtonBuilder()
+                .setCustomId('close_channel')
+                .setLabel('Close Channel')
+                .setStyle(ButtonStyle.Danger)
+                .setEmoji('🗑️');
+
+            const row = new ActionRowBuilder().addComponents(closeButton);
+
+            await interaction.update({
+                embeds: [skipEmbed],
+                components: [row]
+            });
+
+            console.log(`Queue skipped by ${interaction.user.tag} for ${rewardAmount} invites reward`);
+        } else {
+            await interaction.reply({
+                content: `❌ You need **${requiredForSkip} invites** to skip the queue. You currently have **${userInvites} invites**.`,
+                ephemeral: true
+            });
+        }
+    }
+    
+    // Handle continue in queue button
+    else if (customId.startsWith('continue_claim_')) {
+        const rewardAmount = parseInt(customId.split('_')[2]);
+        
+        // Ping admin for regular queue processing
+        const continueEmbed = new EmbedBuilder()
+            .setTitle('⏳ Processing Claim')
+            .setDescription(`**${interaction.user.username}** is ready to proceed with their claim.
+
+<@${config.adminUserId}> - Please process this claim.
+
+**Reward Type:** ${rewardAmount} Invites Reward
+**Status:** In Queue - Ready for Processing`)
+            .setColor(0x5865F2)
+            .setTimestamp();
+
+        const closeButton = new ButtonBuilder()
+            .setCustomId('close_channel')
+            .setLabel('Close Channel')
+            .setStyle(ButtonStyle.Danger)
+            .setEmoji('🗑️');
+
+        const row = new ActionRowBuilder().addComponents(closeButton);
+
+        await interaction.update({
+            embeds: [continueEmbed],
+            components: [row]
+        });
+
+        console.log(`Claim continued by ${interaction.user.tag} for ${rewardAmount} invites reward`);
+    }
+    
+    // Handle close channel button
+    else if (customId === 'close_channel') {
+        try {
+            // Decrease user channel count
+            const currentCount = userClaimChannels.get(interaction.user.id) || 0;
+            if (currentCount > 0) {
+                userClaimChannels.set(interaction.user.id, currentCount - 1);
+            }
+
+            await interaction.reply({
+                content: '🗑️ This channel will be deleted in 5 seconds...',
+                ephemeral: true
+            });
+
+            setTimeout(async () => {
+                try {
+                    await interaction.channel.delete();
+                } catch (error) {
+                    console.error('Error deleting channel:', error);
+                }
+            }, 5000);
+
+            console.log(`Channel closed by ${interaction.user.tag}`);
+        } catch (error) {
+            console.error('Error closing channel:', error);
+            await interaction.reply({
+                content: '❌ Failed to close channel.',
+                ephemeral: true
             });
         }
     }

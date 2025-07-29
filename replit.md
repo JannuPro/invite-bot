@@ -114,6 +114,16 @@ The architecture prioritizes modularity, maintainability, and scalability while 
 
 ## Recent Changes
 
+**July 29, 2025 - Advanced Queue System Implementation**
+- **Implemented dropdown reward system** with 3, 6, 9, 12 invite options
+- **Created private channel system** in category 1399823374921764904 for claim processing
+- **Added queue skip functionality** with additional invite requirements (2-4 extra invites)
+- **Integrated admin pinging** (@jannueducates) for claim processing
+- **Implemented channel limits** (max 2 active channels per user)
+- **Added close channel functionality** with automatic cleanup
+- **Channel renaming** to "quick-claims" for queue skips
+- Bot now creates private claim channels instead of threads for better organization
+
 **July 29, 2025 - Project Migration Completed**
 - Successfully migrated from Replit Agent to Replit environment
 - Installed all required Node.js packages (discord.js, dotenv, drizzle-orm, pg, drizzle-kit)  
