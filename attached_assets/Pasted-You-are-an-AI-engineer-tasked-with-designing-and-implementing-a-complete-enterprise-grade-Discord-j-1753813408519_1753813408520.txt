@@ -1,0 +1,47 @@
+You are an AI engineer tasked with designing and implementing a complete, enterprise‑grade Discord.js v14+ module for **Rewardify** that combines our advanced invite‑tracking engine with a seamless invite‑reward claim system. We have full gateway intents except `GUILD_INVITES`, so invite attribution relies on fetching and comparing invites plus audit‑log fallbacks. Your deliverable is a single cohesive codebase (or set of modules) that implements both:
+
+---  
+### Part A: Advanced Invite Tracking
+
+1. **Real‑Time Fetch & Cache**  
+   - On `ready`, fetch and cache `guild.invites.fetch()` for each guild.  
+   - Update cache on `inviteCreate` / `inviteDelete`.  
+   - On `guildMemberAdd`, fetch invites, diff against cache to find which code’s `uses` increased, and attribute the join.  
+
+2. **Vanity URL Support**  
+   - Fetch `guild.fetchVanityData()` on `ready` and on each join.  
+   - Diff its `uses` count to detect vanity joins.  
+
+3. **Audit‑Log Fallback**  
+   - If no invite delta is found, query the latest `AuditLogEvent.MemberInviteAdd`.  
+   - If still unresolved, mark the join with `inviter_id = null` and log a warning.  
+
+4. **Downtime Backfill**  
+   - On startup, reconcile `guild.members.cache` vs. your `join_log` table.  
+   - Backfill any missing joins by matching highest‑use invites.  
+   - Flag ambiguous cases for manual review.  
+
+5. **Invite Stats Tracking**  
+   - Track **joins**, **leaves**, **bonus**, and **fake** counts per inviter in your `users` table.  
+   - Calculate `total_invites = joins + bonus - leaves - fake`.  
+   - On `guildMemberAdd`, increment `joins`; on `guildMemberRemove`, increment `leaves`.  
+
+6. **Temporary & One‑Time Invites**  
+   - Record `temporary` and `maxUses` when caching invites.  
+   - Auto‑expire invites once used up or past `expiresTimestamp`.  
+
+7. **Resilience & Error Handling**  
+   - Wrap all Discord API calls in `try/catch` with exponential‑backoff retries on rate limits.  
+   - Use request timeouts and structured logging (cache rebuilds, fallbacks, errors).  
+
+8. **Database Integrity**  
+   - Provide migrations/schema for tables: `users`, `invites`, `join_log`, `claims`, `payouts`.  
+   - Include fields: `inviter_id`, `invite_code`, `is_verified`, `is_smartlink_done`, `left_at`, `joins`, `leaves`, `bonus`, `fake`.  
+   - Use transactions for multi‑step updates.  
+
+9. **Performance & Throttling**  
+   - Throttle `guild.invites.fetch()` to at most once per second per guild or trigger-only on invite events.  
+   - Batch DB writes when processing bursts of joins/leaves.  
+
+10. **Documentation & JSDoc**  
+    - Fully document each method with JSDoc, noting fallback logic and error cases.
