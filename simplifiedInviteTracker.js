@@ -146,6 +146,65 @@ class SimplifiedInviteTracker {
     }
 
     /**
+     * Add invite record (simplified)
+     * @param {string} inviterId - ID of user who invited
+     * @param {string} invitedId - ID of user who was invited
+     * @param {string} invitedUsername - Username of invited user
+     * @param {string} source - Source of invite (manual, etc.)
+     * @param {string} guildId - Guild ID
+     * @returns {Promise<void>}
+     */
+    async addInvite(inviterId, invitedId, invitedUsername, source = 'manual', guildId = null) {
+        console.log(`📝 Adding invite record: ${inviterId} invited ${invitedUsername} (${invitedId})`);
+        // In simplified version, just log the action
+    }
+
+    /**
+     * Update user invite counts
+     * @param {string} userId - User ID
+     * @param {number} joins - Regular invites to add
+     * @param {number} bonus - Bonus invites to add
+     * @param {number} leaves - Leave count to add
+     * @param {number} fake - Fake invites to add
+     * @returns {Promise<Object>} Updated user data
+     */
+    async updateUserInvites(userId, joins = 0, bonus = 0, leaves = 0, fake = 0) {
+        console.log(`📊 Updating invites for ${userId}: +${joins} joins, +${bonus} bonus, +${leaves} leaves, +${fake} fake`);
+        const user = await this.getUser(userId);
+        
+        user.joins += joins;
+        user.bonus += bonus;
+        user.leaves += leaves;
+        user.fake += fake;
+        user.total_invites = user.joins + user.bonus - user.leaves - user.fake;
+        
+        return user;
+    }
+
+    /**
+     * Remove invites from a user
+     * @param {string} userId - Discord user ID
+     * @param {number} amount - Number of invites to remove
+     * @returns {Promise<Object>} Updated user data
+     */
+    async removeInvites(userId, amount) {
+        console.log(`➖ Removing ${amount} invites from user ${userId}`);
+        const user = await this.getUser(userId);
+        
+        // Remove from bonus first, then from regular invites
+        if (user.bonus >= amount) {
+            user.bonus -= amount;
+        } else {
+            const remaining = amount - user.bonus;
+            user.bonus = 0;
+            user.joins = Math.max(0, user.joins - remaining);
+        }
+        
+        user.total_invites = user.joins + user.bonus - user.leaves - user.fake;
+        return user;
+    }
+
+    /**
      * Get guild config (simplified)
      * @param {string} guildId - Guild ID
      * @returns {Promise<Object|null>} Guild config or null

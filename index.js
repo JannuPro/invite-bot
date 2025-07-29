@@ -167,19 +167,37 @@ client.once('ready', async () => {
             ]
         },
         {
-            name: 'add-bonus-invites',
-            description: 'Add bonus invites to a user (Admin only)',
+            name: 'invites-add',
+            description: 'Add invites to a user (Admin only)',
             options: [
                 {
                     type: 6, // USER
                     name: 'user',
-                    description: 'The user to give bonus invites to',
+                    description: 'The user to give invites to',
                     required: true
                 },
                 {
                     type: 4, // INTEGER
                     name: 'amount',
-                    description: 'Number of bonus invites to add',
+                    description: 'Number of invites to add',
+                    required: true
+                }
+            ]
+        },
+        {
+            name: 'invites-remove',
+            description: 'Remove invites from a user (Admin only)',
+            options: [
+                {
+                    type: 6, // USER
+                    name: 'user',
+                    description: 'The user to remove invites from',
+                    required: true
+                },
+                {
+                    type: 4, // INTEGER
+                    name: 'amount',
+                    description: 'Number of invites to remove',
                     required: true
                 }
             ]
@@ -404,11 +422,11 @@ async function handleSlashCommand(interaction) {
         }
     }
     
-    else if (commandName === 'add-bonus-invites') {
-        // Check if user has admin permissions
+    else if (commandName === 'invites-add') {
+        // Check admin permissions
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return await interaction.reply({
-                content: '❌ You need Administrator permission to add bonus invites.',
+                content: '❌ You need Administrator permission to add invites.',
                 flags: [4096]
             });
         }
@@ -430,30 +448,89 @@ async function handleSlashCommand(interaction) {
                 user = await inviteTracker.createUser(targetUser.id, targetUser.username, targetUser.displayName, targetUser.createdAt);
             }
             
-            // Add bonus invites
+            // Add invites
             const updatedUser = await inviteTracker.addBonusInvites(targetUser.id, amount);
             
             const embed = new EmbedBuilder()
-                .setTitle('✅ Bonus Invites Added')
-                .setDescription(`Successfully added **${amount}** bonus invites to ${targetUser}`)
+                .setTitle('✅ Invites Added')
+                .setDescription(`Successfully added **${amount}** invites to ${targetUser}`)
                 .setColor(0x00FF00)
                 .addFields([
-                    { name: 'Previous Total', value: `${updatedUser.total_invites - amount}`, inline: true },
-                    { name: 'Bonus Added', value: `${amount}`, inline: true },
-                    { name: 'New Total', value: `${updatedUser.total_invites}`, inline: true }
+                    { name: 'User', value: `${targetUser}`, inline: true },
+                    { name: 'Invites Added', value: `${amount}`, inline: true },
+                    { name: 'New Total', value: `${updatedUser.total_invites} invites`, inline: true }
                 ])
                 .setTimestamp();
             
             await interaction.reply({ embeds: [embed], flags: [4096] });
             
-            // Check for role rewards after adding bonus invites
-            await inviteTracker.checkRoleRewards(interaction.guild, targetUser.id);
-            
-            console.log(`${amount} bonus invites added to ${targetUser.tag} by ${interaction.user.tag}`);
+            console.log(`Invites added: ${amount} to ${targetUser.tag} (by ${interaction.user.tag})`);
         } catch (error) {
-            console.error('Error adding bonus invites:', error);
+            console.error('Error adding invites:', error);
             await interaction.reply({
-                content: '❌ Failed to add bonus invites.',
+                content: '❌ Failed to add invites.',
+                flags: [4096]
+            });
+        }
+    }
+    
+    else if (commandName === 'invites-remove') {
+        // Check admin permissions
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return await interaction.reply({
+                content: '❌ You need Administrator permission to remove invites.',
+                flags: [4096]
+            });
+        }
+        
+        const targetUser = options.getUser('user');
+        const amount = options.getInteger('amount');
+        
+        if (amount <= 0) {
+            return await interaction.reply({
+                content: '❌ Amount must be a positive number.',
+                flags: [4096]
+            });
+        }
+        
+        try {
+            // Ensure user exists in database
+            let user = await inviteTracker.getUser(targetUser.id);
+            if (!user) {
+                return await interaction.reply({
+                    content: '❌ User not found in the database.',
+                    flags: [4096]
+                });
+            }
+            
+            if (user.total_invites < amount) {
+                return await interaction.reply({
+                    content: `❌ User only has **${user.total_invites}** invites. Cannot remove **${amount}**.`,
+                    flags: [4096]
+                });
+            }
+            
+            // Remove invites
+            const updatedUser = await inviteTracker.removeInvites(targetUser.id, amount);
+            
+            const embed = new EmbedBuilder()
+                .setTitle('✅ Invites Removed')
+                .setDescription(`Successfully removed **${amount}** invites from ${targetUser}`)
+                .setColor(0xFF6B6B)
+                .addFields([
+                    { name: 'User', value: `${targetUser}`, inline: true },
+                    { name: 'Invites Removed', value: `${amount}`, inline: true },
+                    { name: 'New Total', value: `${updatedUser.total_invites} invites`, inline: true }
+                ])
+                .setTimestamp();
+            
+            await interaction.reply({ embeds: [embed], flags: [4096] });
+            
+            console.log(`Invites removed: ${amount} from ${targetUser.tag} (by ${interaction.user.tag})`);
+        } catch (error) {
+            console.error('Error removing invites:', error);
+            await interaction.reply({
+                content: '❌ Failed to remove invites.',
                 flags: [4096]
             });
         }
@@ -737,22 +814,9 @@ async function handleButtonInteraction(interaction) {
         
         const statusEmbed = new EmbedBuilder()
             .setTitle('📊 Your Invite Count')
-            .setDescription(`You currently have **${totalInvites}** ${totalInvites === 1 ? 'invite' : 'invites'}. (${regularInvites} regular)`)
+            .setDescription(`You currently have **${totalInvites}** ${totalInvites === 1 ? 'invite' : 'invites'}.`)
             .setColor(0x5865F2)
-            .addFields([
-                { name: '✅ Regular Invites', value: `${regularInvites}`, inline: true },
-                { name: '🎁 Bonus Invites', value: `${bonusInvites}`, inline: true },
-                { name: '📊 Total Invites', value: `${totalInvites}`, inline: true }
-            ])
             .setTimestamp();
-
-        if (leftInvites > 0 || fakeInvites > 0) {
-            statusEmbed.addFields([
-                { name: '👋 Left Server', value: `${leftInvites}`, inline: true },
-                { name: '❌ Invalid (New Account)', value: `${fakeInvites}`, inline: true },
-                { name: '\u200B', value: '\u200B', inline: true }
-            ]);
-        }
         
         // Send private response
         await interaction.reply({
