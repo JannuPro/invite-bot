@@ -721,14 +721,14 @@ To skip the queue, you need **${rewardInfo.skipCost} additional invites** (total
 
             await interaction.reply({
                 content: `✅ Private claim channel created: ${claimChannel}`,
-                ephemeral: true
+                flags: [4096]
             });
 
         } catch (error) {
             console.error('Error creating claim channel:', error);
             await interaction.reply({
                 content: '❌ Failed to create claim channel. Please try again.',
-                ephemeral: true
+                flags: [4096]
             });
         }
     }
@@ -1137,7 +1137,7 @@ async function handleButtonInteraction(interaction) {
         } else {
             await interaction.reply({
                 content: `❌ You need **${requiredForSkip} invites** to skip the queue. You currently have **${userInvites} invites**.`,
-                ephemeral: true
+                flags: [4096]
             });
         }
     }
@@ -1185,7 +1185,7 @@ async function handleButtonInteraction(interaction) {
 
             await interaction.reply({
                 content: '🗑️ This channel will be deleted in 5 seconds...',
-                ephemeral: true
+                flags: [4096]
             });
 
             setTimeout(async () => {
@@ -1201,7 +1201,7 @@ async function handleButtonInteraction(interaction) {
             console.error('Error closing channel:', error);
             await interaction.reply({
                 content: '❌ Failed to close channel.',
-                ephemeral: true
+                flags: [4096]
             });
         }
     }

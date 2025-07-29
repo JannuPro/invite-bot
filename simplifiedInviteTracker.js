@@ -4,6 +4,7 @@ class SimplifiedInviteTracker {
     constructor(client) {
         this.client = client;
         this.guildInvites = new Map(); // Cache for guild invites
+        this.userData = new Map(); // Store user invite data in memory
     }
 
     async init() {
@@ -47,21 +48,30 @@ class SimplifiedInviteTracker {
     }
 
     /**
-     * Get user data (simplified - returns mock data for now)
+     * Get user data from memory storage
      * @param {string} userId - Discord user ID
      * @returns {Promise<Object|null>} User data or null if not found
      */
     async getUser(userId) {
-        // Simplified version - just return basic structure
-        return {
+        // Check if user exists in memory
+        if (this.userData.has(userId)) {
+            return this.userData.get(userId);
+        }
+        
+        // Return default user structure if not found
+        const defaultUser = {
             user_id: userId,
             username: 'Unknown',
-            total_invites: 1, // Default to 1 for testing
-            joins: 1,
+            total_invites: 0,
+            joins: 0,
             bonus: 0,
             leaves: 0,
             fake: 0
         };
+        
+        // Store the default user
+        this.userData.set(userId, defaultUser);
+        return defaultUser;
     }
 
     /**
@@ -141,7 +151,11 @@ class SimplifiedInviteTracker {
         console.log(`💰 Adding ${amount} bonus invites to user ${userId}`);
         const user = await this.getUser(userId);
         user.bonus += amount;
-        user.total_invites += amount;
+        user.total_invites = user.joins + user.bonus - user.leaves - user.fake;
+        
+        // Store updated user data
+        this.userData.set(userId, user);
+        console.log(`✅ User ${userId} now has ${user.total_invites} total invites`);
         return user;
     }
 
@@ -201,6 +215,10 @@ class SimplifiedInviteTracker {
         }
         
         user.total_invites = user.joins + user.bonus - user.leaves - user.fake;
+        
+        // Store updated user data
+        this.userData.set(userId, user);
+        console.log(`✅ User ${userId} now has ${user.total_invites} total invites`);
         return user;
     }
 
