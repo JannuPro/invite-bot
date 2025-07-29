@@ -2,11 +2,13 @@ const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder
 const SimplifiedInviteTracker = require('./simplifiedInviteTracker.js');
 require('dotenv').config();
 
-// Create Discord client
+// Create Discord client with necessary intents
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildInvites,
+        GatewayIntentBits.GuildMembers  // Required for member join/leave events
     ]
 });
 
@@ -627,11 +629,11 @@ async function handleSelectMenuInteraction(interaction) {
             });
         }
 
-        // Check if user already has 2 active channels
+        // Check if user already has 1 active thread
         const userChannelCount = userClaimChannels.get(interaction.user.id) || 0;
-        if (userChannelCount >= 2) {
+        if (userChannelCount >= 1) {
             return await interaction.reply({
-                content: '❌ You can only have **2 active claim threads** at a time. Please close an existing thread first.',
+                content: '❌ You already have an active claim thread. Please close it before creating another.',
                 flags: [4096]
             });
         }
@@ -651,7 +653,7 @@ async function handleSelectMenuInteraction(interaction) {
             // Add user to the private thread
             await claimThread.members.add(interaction.user.id);
 
-            // Update user channel count
+            // Update user thread count
             userClaimChannels.set(interaction.user.id, userChannelCount + 1);
 
             // Create queue embed and buttons
@@ -662,7 +664,7 @@ async function handleSelectMenuInteraction(interaction) {
 **Queue Skip Option:**
 To skip the queue, you need **${rewardInfo.skipCost} additional invites** (total: ${rewardInfo.required + rewardInfo.skipCost} invites).
 
-**Current Status:** In Queue
+**Current Status:** Ready for Processing
 **Required Invites:** ${rewardInfo.required}
 **Your Invites:** ${userInvites}`)
                 .setColor(0x5865F2)
@@ -674,19 +676,19 @@ To skip the queue, you need **${rewardInfo.skipCost} additional invites** (total
                 .setStyle(ButtonStyle.Secondary)
                 .setEmoji('⚡');
 
-            const continueButton = new ButtonBuilder()
+            const processButton = new ButtonBuilder()
                 .setCustomId(`continue_claim_${selectedValue}`)
-                .setLabel('Continue in Queue')
+                .setLabel('Ready for Processing')
                 .setStyle(ButtonStyle.Primary)
-                .setEmoji('⏳');
+                .setEmoji('🎁');
 
             const closeButton = new ButtonBuilder()
                 .setCustomId('close_channel')
-                .setLabel('Close Channel')
+                .setLabel('Close Thread')
                 .setStyle(ButtonStyle.Danger)
                 .setEmoji('🗑️');
 
-            const buttonRow = new ActionRowBuilder().addComponents(skipButton, continueButton, closeButton);
+            const buttonRow = new ActionRowBuilder().addComponents(skipButton, processButton, closeButton);
 
             await claimThread.send({
                 content: `${interaction.user}`,

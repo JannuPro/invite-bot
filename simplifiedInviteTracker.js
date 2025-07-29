@@ -84,7 +84,7 @@ class SimplifiedInviteTracker {
      */
     async createUser(userId, username, displayName, accountAge) {
         console.log(`📝 Creating user record for ${username} (${userId})`);
-        return {
+        const newUser = {
             user_id: userId,
             username: username,
             display_name: displayName,
@@ -95,6 +95,10 @@ class SimplifiedInviteTracker {
             fake: 0,
             total_invites: 0
         };
+        
+        // Store the new user in memory
+        this.userData.set(userId, newUser);
+        return newUser;
     }
 
     /**
