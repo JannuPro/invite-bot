@@ -192,6 +192,10 @@ class SimplifiedInviteTracker {
         user.fake += fake;
         user.total_invites = user.joins + user.bonus - user.leaves - user.fake;
         
+        // Store updated user data
+        this.userData.set(userId, user);
+        console.log(`✅ User ${userId} now has ${user.total_invites} total invites (${user.joins} joins + ${user.bonus} bonus - ${user.leaves} leaves - ${user.fake} fake)`);
+        
         return user;
     }
 

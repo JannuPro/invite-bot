@@ -114,6 +114,15 @@ The architecture prioritizes modularity, maintainability, and scalability while 
 
 ## Recent Changes
 
+**July 29, 2025 - Thread System & Auto Invite Tracking Implementation**
+- **Switched to private threads** instead of channels to fix permission errors
+- **Implemented automatic invite tracking** for real Discord invites via member join events
+- **Fixed invite storage system** with proper in-memory persistence
+- **Added member join/leave event handlers** to automatically credit inviters
+- **Fixed all ephemeral deprecation warnings** using flags syntax
+- **Thread management** with archive functionality instead of deletion
+- Manual invite commands (/invites-add, /invites-remove) now work properly with persistence
+
 **July 29, 2025 - Advanced Queue System Implementation**
 - **Implemented dropdown reward system** with 3, 6, 9, 12 invite options
 - **Created private channel system** in category 1399823374921764904 for claim processing

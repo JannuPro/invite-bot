@@ -612,7 +612,7 @@ async function handleSelectMenuInteraction(interaction) {
         if (!rewardInfo) {
             return await interaction.reply({
                 content: '❌ Invalid reward selection.',
-                ephemeral: true
+                flags: [4096]
             });
         }
 
@@ -623,7 +623,7 @@ async function handleSelectMenuInteraction(interaction) {
         if (userInvites < rewardInfo.required) {
             return await interaction.reply({
                 content: `❌ You need **${rewardInfo.required} invites** to claim this reward. You currently have **${userInvites} invites**.`,
-                ephemeral: true
+                flags: [4096]
             });
         }
 
@@ -631,50 +631,25 @@ async function handleSelectMenuInteraction(interaction) {
         const userChannelCount = userClaimChannels.get(interaction.user.id) || 0;
         if (userChannelCount >= 2) {
             return await interaction.reply({
-                content: '❌ You can only have **2 active claim channels** at a time. Please close an existing channel first.',
-                ephemeral: true
+                content: '❌ You can only have **2 active claim threads** at a time. Please close an existing thread first.',
+                flags: [4096]
             });
         }
 
         try {
-            // Create private channel in the claims category
-            const category = interaction.guild.channels.cache.get(config.claimsCategoryId);
-            if (!category) {
-                return await interaction.reply({
-                    content: '❌ Claims category not found. Please contact an administrator.',
-                    ephemeral: true
-                });
-            }
-
-            const channelName = `${interaction.user.username}-${selectedValue}-invites`;
-            const claimChannel = await interaction.guild.channels.create({
-                name: channelName,
-                type: ChannelType.GuildText,
-                parent: category.id,
-                permissionOverwrites: [
-                    {
-                        id: interaction.guild.id,
-                        deny: [PermissionFlagsBits.ViewChannel]
-                    },
-                    {
-                        id: interaction.user.id,
-                        allow: [
-                            PermissionFlagsBits.ViewChannel,
-                            PermissionFlagsBits.SendMessages,
-                            PermissionFlagsBits.ReadMessageHistory
-                        ]
-                    },
-                    {
-                        id: config.adminUserId,
-                        allow: [
-                            PermissionFlagsBits.ViewChannel,
-                            PermissionFlagsBits.SendMessages,
-                            PermissionFlagsBits.ReadMessageHistory,
-                            PermissionFlagsBits.ManageChannels
-                        ]
-                    }
-                ]
+            // Create private thread instead of channel
+            const threadName = `🎁-${interaction.user.username}-${selectedValue}inv-claim`;
+            
+            const claimThread = await interaction.channel.threads.create({
+                name: threadName,
+                autoArchiveDuration: 60,
+                type: ChannelType.PrivateThread,
+                invitable: false,
+                reason: `Private claim thread for ${interaction.user.tag} - ${selectedValue} invites reward`
             });
+
+            // Add user to the private thread
+            await claimThread.members.add(interaction.user.id);
 
             // Update user channel count
             userClaimChannels.set(interaction.user.id, userChannelCount + 1);
@@ -713,21 +688,21 @@ To skip the queue, you need **${rewardInfo.skipCost} additional invites** (total
 
             const buttonRow = new ActionRowBuilder().addComponents(skipButton, continueButton, closeButton);
 
-            await claimChannel.send({
+            await claimThread.send({
                 content: `${interaction.user}`,
                 embeds: [queueEmbed],
                 components: [buttonRow]
             });
 
             await interaction.reply({
-                content: `✅ Private claim channel created: ${claimChannel}`,
+                content: `✅ Private claim thread created: ${claimThread}`,
                 flags: [4096]
             });
 
         } catch (error) {
-            console.error('Error creating claim channel:', error);
+            console.error('Error creating claim thread:', error);
             await interaction.reply({
-                content: '❌ Failed to create claim channel. Please try again.',
+                content: '❌ Failed to create claim thread. Please try again.',
                 flags: [4096]
             });
         }
@@ -1177,38 +1152,100 @@ async function handleButtonInteraction(interaction) {
     // Handle close channel button
     else if (customId === 'close_channel') {
         try {
-            // Decrease user channel count
+            // Decrease user thread count
             const currentCount = userClaimChannels.get(interaction.user.id) || 0;
             if (currentCount > 0) {
                 userClaimChannels.set(interaction.user.id, currentCount - 1);
             }
 
             await interaction.reply({
-                content: '🗑️ This channel will be deleted in 5 seconds...',
+                content: '🗑️ This thread will be archived in 5 seconds...',
                 flags: [4096]
             });
 
             setTimeout(async () => {
                 try {
-                    await interaction.channel.delete();
+                    if (interaction.channel.isThread()) {
+                        await interaction.channel.setArchived(true);
+                    } else {
+                        await interaction.channel.delete();
+                    }
                 } catch (error) {
-                    console.error('Error deleting channel:', error);
+                    console.error('Error archiving/deleting thread:', error);
                 }
             }, 5000);
 
-            console.log(`Channel closed by ${interaction.user.tag}`);
+            console.log(`Thread closed by ${interaction.user.tag}`);
         } catch (error) {
-            console.error('Error closing channel:', error);
+            console.error('Error closing thread:', error);
             await interaction.reply({
-                content: '❌ Failed to close channel.',
+                content: '❌ Failed to close thread.',
                 flags: [4096]
             });
         }
     }
 }
 
-// Note: Member join/leave events disabled due to privileged intent requirements
-// Use manual invite tracking with /credit-invite command instead
+// Member join event - track invites
+client.on('guildMemberAdd', async member => {
+    try {
+        console.log(`👋 ${member.user.username} joined ${member.guild.name}`);
+        
+        // Get current invites
+        const newInvites = await member.guild.invites.fetch();
+        const oldInvites = inviteTracker.guildInvites.get(member.guild.id) || new Map();
+        
+        // Find which invite was used
+        let usedInvite = null;
+        for (const [code, invite] of newInvites) {
+            const oldInvite = oldInvites.get(code);
+            if (oldInvite && invite.uses > oldInvite.uses) {
+                usedInvite = invite;
+                break;
+            }
+        }
+        
+        if (usedInvite && usedInvite.inviter) {
+            // Credit the inviter
+            console.log(`📈 ${usedInvite.inviter.username} gets credit for inviting ${member.user.username}`);
+            
+            // Get or create inviter user data
+            let inviter = await inviteTracker.getUser(usedInvite.inviter.id);
+            if (!inviter) {
+                inviter = await inviteTracker.createUser(
+                    usedInvite.inviter.id,
+                    usedInvite.inviter.username,
+                    usedInvite.inviter.displayName || usedInvite.inviter.username,
+                    usedInvite.inviter.createdAt
+                );
+            }
+            
+            // Add regular invite
+            await inviteTracker.updateUserInvites(usedInvite.inviter.id, 1, 0, 0, 0);
+            
+            console.log(`✅ Credited 1 invite to ${usedInvite.inviter.username} for ${member.user.username} joining`);
+        }
+        
+        // Update cached invites
+        await inviteTracker.cacheGuildInvites(member.guild);
+        
+    } catch (error) {
+        console.error('Error processing member join:', error);
+    }
+});
+
+// Member leave event - handle leaves
+client.on('guildMemberRemove', async member => {
+    try {
+        console.log(`👋 ${member.user.username} left ${member.guild.name}`);
+        
+        // Update cached invites
+        await inviteTracker.cacheGuildInvites(member.guild);
+        
+    } catch (error) {
+        console.error('Error processing member leave:', error);
+    }
+});
 
 // Error handling
 client.on('error', error => {
