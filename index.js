@@ -215,10 +215,26 @@ class SupabaseInviteTracker {
                     invited_user_id: invitedUserId,
                     invited_username: invitedUsername,
                     invite_code: inviteCode,
-                    guild_id: guildId
+                    guild_id: guildId,
+                    is_left: false
                 });
             
-            console.log(`📝 Logged join: ${invitedUsername} invited by ${inviterId}`);
+            if (error) {
+                console.error('❌ Error logging join to Supabase:', error);
+                // Store in memory as fallback
+                if (!this.joinLog) this.joinLog = new Map();
+                this.joinLog.set(invitedUserId, {
+                    inviter_id: inviterId,
+                    invited_username: invitedUsername,
+                    invite_code: inviteCode,
+                    guild_id: guildId,
+                    is_left: false,
+                    created_at: new Date()
+                });
+                console.log(`📝 Logged join in memory: ${invitedUsername} invited by ${inviterId}`);
+            } else {
+                console.log(`📝 Logged join: ${invitedUsername} invited by ${inviterId}`);
+            }
         } catch (error) {
             console.error('❌ Error logging join:', error);
         }
@@ -1587,39 +1603,65 @@ client.on('guildMemberRemove', async member => {
         console.log(`👋 ${member.user.username} left ${member.guild.name}`);
         
         // Find who invited this user and decrement their invites
-        const { data: joinRecord, error: selectError } = await supabase
-            .from('join_log')
-            .select('inviter_id')
-            .eq('invited_user_id', member.user.id)
-            .eq('guild_id', member.guild.id)
-            .eq('is_left', false)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
+        let joinRecord = null;
+        let inviterId = null;
 
-        if (joinRecord && joinRecord.inviter_id) {
-            console.log(`📉 Found inviter ${joinRecord.inviter_id} for leaving user ${member.user.username}`);
-            
-            // Mark the join record as left
-            const { error: updateError } = await supabase
+        // Try Supabase first
+        try {
+            const { data, error: selectError } = await supabase
                 .from('join_log')
-                .update({ is_left: true, left_at: new Date().toISOString() })
+                .select('inviter_id')
                 .eq('invited_user_id', member.user.id)
-                .eq('inviter_id', joinRecord.inviter_id)
                 .eq('guild_id', member.guild.id)
-                .eq('is_left', false);
+                .eq('is_left', false)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
 
-            if (!updateError) {
-                // Decrement the inviter's leave count (which reduces total invites)
-                await inviteTracker.updateUserInvites(joinRecord.inviter_id, 0, 0, 1, 0);
-                console.log(`📉 Decremented invite for inviter ${joinRecord.inviter_id} due to ${member.user.username} leaving`);
+            if (data && !selectError) {
+                joinRecord = data;
+                inviterId = data.inviter_id;
+                console.log(`📉 Found inviter ${inviterId} in Supabase for leaving user ${member.user.username}`);
             } else {
-                console.error('Error marking join record as left:', updateError);
+                console.log('No Supabase join record found, checking memory...');
             }
-        } else if (selectError) {
-            console.error('Error finding join record:', selectError);
+        } catch (error) {
+            console.log('Supabase query failed, checking memory fallback...');
+        }
+
+        // Fallback to memory if Supabase fails
+        if (!inviterId && inviteTracker.joinLog && inviteTracker.joinLog.has(member.user.id)) {
+            const memoryRecord = inviteTracker.joinLog.get(member.user.id);
+            if (!memoryRecord.is_left) {
+                inviterId = memoryRecord.inviter_id;
+                console.log(`📉 Found inviter ${inviterId} in memory for leaving user ${member.user.username}`);
+                
+                // Mark as left in memory
+                memoryRecord.is_left = true;
+                memoryRecord.left_at = new Date();
+            }
+        }
+
+        if (inviterId) {
+            // Decrement the inviter's leave count (which reduces total invites)
+            await inviteTracker.updateUserInvites(inviterId, 0, 0, 1, 0);
+            console.log(`📉 Successfully decremented invite for inviter ${inviterId} due to ${member.user.username} leaving`);
+            
+            // Try to update Supabase if we found the record there
+            if (joinRecord) {
+                try {
+                    await supabase
+                        .from('join_log')
+                        .update({ is_left: true, left_at: new Date().toISOString() })
+                        .eq('invited_user_id', member.user.id)
+                        .eq('guild_id', member.guild.id)
+                        .eq('is_left', false);
+                } catch (error) {
+                    console.log('Failed to update Supabase, but memory tracking updated');
+                }
+            }
         } else {
-            console.log(`❓ No active join record found for ${member.user.username} leaving`);
+            console.log(`❓ No join record found for ${member.user.username} leaving`);
         }
         
         // Send leave log to channel if configured
