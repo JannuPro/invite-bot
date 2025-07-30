@@ -114,12 +114,13 @@ The architecture prioritizes modularity, maintainability, and scalability while 
 
 ## Recent Changes
 
-**July 30, 2025 - Supabase Database Integration**
-- **Switched to Supabase** for free, reliable database storage
-- **Zero additional costs** using Supabase's generous free tier
-- **Production-ready persistence** with enterprise-grade cloud database
-- **Better features** than paid alternatives - real-time, APIs, authentication
-- Manual table creation required via Supabase dashboard (see SUPABASE_SETUP.md)
+**July 30, 2025 - Supabase Database Integration & Comprehensive Logging**
+- **Switched to Supabase** for free, reliable database storage with zero costs
+- **Fixed missing methods** - addBonusInvites, getLeaderboard, guild config management
+- **Added join/leave logging** with rich embeds showing joiner, inviter, invite code
+- **Created /set-log-channel command** for admins to configure log destinations
+- **Comprehensive audit trails** with detailed database logging of all invite activity
+- **Enterprise-grade persistence** with 4-table schema (users, join_log, guild_config, invite_rewards)
 
 **July 29, 2025 - Thread System & Auto Invite Tracking Implementation**
 - **Switched to private threads** instead of channels to fix permission errors

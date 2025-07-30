@@ -149,6 +149,73 @@ class SupabaseInviteTracker {
             return await this.getUser(userId);
         }
     }
+
+    async addBonusInvites(userId, amount) {
+        return await this.updateUserInvites(userId, 0, amount, 0, 0);
+    }
+
+    async getLeaderboard(limit = 10) {
+        try {
+            const { data, error } = await supabase
+                .from('users')
+                .select('user_id, username, total_invites, joins, bonus')
+                .order('total_invites', { ascending: false })
+                .limit(limit);
+            
+            return data || [];
+        } catch (error) {
+            console.error('❌ Error getting leaderboard:', error);
+            return [];
+        }
+    }
+
+    async logJoin(inviterId, invitedUserId, invitedUsername, inviteCode, guildId) {
+        try {
+            const { data, error } = await supabase
+                .from('join_log')
+                .insert({
+                    inviter_id: inviterId,
+                    invited_user_id: invitedUserId,
+                    invited_username: invitedUsername,
+                    invite_code: inviteCode,
+                    guild_id: guildId
+                });
+            
+            console.log(`📝 Logged join: ${invitedUsername} invited by ${inviterId}`);
+        } catch (error) {
+            console.error('❌ Error logging join:', error);
+        }
+    }
+
+    async getGuildConfig(guildId) {
+        try {
+            const { data, error } = await supabase
+                .from('guild_config')
+                .select('*')
+                .eq('guild_id', guildId)
+                .single();
+            
+            return data;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async setGuildConfig(guildId, config) {
+        try {
+            const { data, error } = await supabase
+                .from('guild_config')
+                .upsert({
+                    guild_id: guildId,
+                    ...config
+                });
+            
+            return data;
+        } catch (error) {
+            console.error('❌ Error setting guild config:', error);
+            return null;
+        }
+    }
 }
 require('dotenv').config();
 
@@ -220,6 +287,57 @@ function createInviteCheckEmbed(title, description, initiator) {
         .setColor(0x5865F2) // Discord blue color
         .setFooter({ text: 'Click the button below to check your invites' })
         .setTimestamp();
+}
+
+// Join/Leave logging functions
+async function sendJoinLog(member, inviter, inviteCode) {
+    try {
+        const guildConfig = await inviteTracker.getGuildConfig(member.guild.id);
+        if (!guildConfig || !guildConfig.log_channel_id) return;
+        
+        const logChannel = member.guild.channels.cache.get(guildConfig.log_channel_id);
+        if (!logChannel) return;
+        
+        const joinEmbed = new EmbedBuilder()
+            .setTitle('📥 Member Joined')
+            .setColor(0x00ff00)
+            .addFields(
+                { name: '👤 User', value: `${member.user.tag} (${member.user.id})`, inline: true },
+                { name: '🎫 Invited by', value: `${inviter.tag} (${inviter.id})`, inline: true },
+                { name: '🔗 Invite Code', value: inviteCode, inline: true },
+                { name: '📊 Member Count', value: member.guild.memberCount.toString(), inline: true }
+            )
+            .setTimestamp()
+            .setThumbnail(member.user.displayAvatarURL());
+        
+        await logChannel.send({ embeds: [joinEmbed] });
+    } catch (error) {
+        console.error('Error sending join log:', error);
+    }
+}
+
+async function sendLeaveLog(member) {
+    try {
+        const guildConfig = await inviteTracker.getGuildConfig(member.guild.id);
+        if (!guildConfig || !guildConfig.log_channel_id) return;
+        
+        const logChannel = member.guild.channels.cache.get(guildConfig.log_channel_id);
+        if (!logChannel) return;
+        
+        const leaveEmbed = new EmbedBuilder()
+            .setTitle('📤 Member Left')
+            .setColor(0xff0000)
+            .addFields(
+                { name: '👤 User', value: `${member.user.tag} (${member.user.id})`, inline: true },
+                { name: '📊 Member Count', value: member.guild.memberCount.toString(), inline: true }
+            )
+            .setTimestamp()
+            .setThumbnail(member.user.displayAvatarURL());
+        
+        await logChannel.send({ embeds: [leaveEmbed] });
+    } catch (error) {
+        console.error('Error sending leave log:', error);
+    }
 }
 
 function createSuccessEmbed(title, description) {
@@ -350,6 +468,18 @@ client.once('ready', async () => {
                     type: 4, // INTEGER
                     name: 'amount',
                     description: 'Number of invites to remove',
+                    required: true
+                }
+            ]
+        },
+        {
+            name: 'set-log-channel',
+            description: 'Set the channel for join/leave logs (Admin only)',
+            options: [
+                {
+                    name: 'channel',
+                    description: 'The channel to send join/leave logs to',
+                    type: 7, // CHANNEL type
                     required: true
                 }
             ]
@@ -1375,6 +1505,18 @@ client.on('guildMemberAdd', async member => {
             // Add regular invite
             await inviteTracker.updateUserInvites(usedInvite.inviter.id, 1, 0, 0, 0);
             
+            // Log the join in database
+            await inviteTracker.logJoin(
+                usedInvite.inviter.id,
+                member.user.id,
+                member.user.username,
+                usedInvite.code,
+                member.guild.id
+            );
+            
+            // Send join log to channel if configured
+            await sendJoinLog(member, usedInvite.inviter, usedInvite.code);
+            
             console.log(`✅ Credited 1 invite to ${usedInvite.inviter.username} for ${member.user.username} joining`);
         }
         
@@ -1390,6 +1532,9 @@ client.on('guildMemberAdd', async member => {
 client.on('guildMemberRemove', async member => {
     try {
         console.log(`👋 ${member.user.username} left ${member.guild.name}`);
+        
+        // Send leave log to channel if configured
+        await sendLeaveLog(member);
         
         // Update cached invites
         await inviteTracker.cacheGuildInvites(member.guild);
