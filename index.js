@@ -1587,7 +1587,7 @@ client.on('guildMemberRemove', async member => {
         console.log(`👋 ${member.user.username} left ${member.guild.name}`);
         
         // Find who invited this user and decrement their invites
-        const { data: joinRecord } = await supabase
+        const { data: joinRecord, error: selectError } = await supabase
             .from('join_log')
             .select('inviter_id')
             .eq('invited_user_id', member.user.id)
@@ -1598,8 +1598,10 @@ client.on('guildMemberRemove', async member => {
             .single();
 
         if (joinRecord && joinRecord.inviter_id) {
+            console.log(`📉 Found inviter ${joinRecord.inviter_id} for leaving user ${member.user.username}`);
+            
             // Mark the join record as left
-            await supabase
+            const { error: updateError } = await supabase
                 .from('join_log')
                 .update({ is_left: true, left_at: new Date().toISOString() })
                 .eq('invited_user_id', member.user.id)
@@ -1607,10 +1609,17 @@ client.on('guildMemberRemove', async member => {
                 .eq('guild_id', member.guild.id)
                 .eq('is_left', false);
 
-            // Decrement the inviter's leave count (which reduces total invites)
-            await inviteTracker.updateUserInvites(joinRecord.inviter_id, 0, 0, 1, 0);
-            
-            console.log(`📉 Decremented invite for inviter ${joinRecord.inviter_id} due to ${member.user.username} leaving`);
+            if (!updateError) {
+                // Decrement the inviter's leave count (which reduces total invites)
+                await inviteTracker.updateUserInvites(joinRecord.inviter_id, 0, 0, 1, 0);
+                console.log(`📉 Decremented invite for inviter ${joinRecord.inviter_id} due to ${member.user.username} leaving`);
+            } else {
+                console.error('Error marking join record as left:', updateError);
+            }
+        } else if (selectError) {
+            console.error('Error finding join record:', selectError);
+        } else {
+            console.log(`❓ No active join record found for ${member.user.username} leaving`);
         }
         
         // Send leave log to channel if configured
