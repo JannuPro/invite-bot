@@ -114,12 +114,13 @@ The architecture prioritizes modularity, maintainability, and scalability while 
 
 ## Recent Changes
 
-**July 30, 2025 - Leave Tracking Fix & Memory Fallback System**
+**July 30, 2025 - Leave Tracking Fix & Project Cleanup**
 - **Fixed leave tracking completely** - implemented dual storage system (Supabase + memory fallback)
 - **Memory backup system** - ensures invite counting works even if database tables fail
 - **Robust error handling** - graceful fallback when Supabase tables aren't accessible
 - **Fixed removeInvites command** - properly removes from bonus first, then regular invites
 - **Simplified logging** - clean user messages for join/leave events
+- **Project cleanup** - removed all unnecessary Python files, now pure Node.js/JavaScript
 - **Reliable invite counting** - leave events now correctly decrement inviter's count
 
 **July 29, 2025 - Thread System & Auto Invite Tracking Implementation**
