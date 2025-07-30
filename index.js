@@ -1,54 +1,34 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
-const { Pool } = require('pg');
+const { supabase } = require('./supabaseClient.js');
 
-// PostgreSQL connection
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: false
-});
-
-// Simplified database-backed invite tracker
-class DatabaseInviteTracker {
+// Supabase-backed invite tracker
+class SupabaseInviteTracker {
     constructor(client) {
         this.client = client;
         this.guildInvites = new Map();
     }
 
     async init() {
-        console.log('🔄 Initializing database invite tracker...');
+        console.log('🔄 Initializing Supabase invite tracker...');
         
         try {
-            // Create tables if they don't exist
-            await this.createTables();
+            // Test Supabase connection
+            const { data, error } = await supabase.from('users').select('count').limit(1);
+            if (error && error.code !== 'PGRST116') {
+                console.log('⚠️ Supabase tables need to be created manually - see SUPABASE_SETUP.md');
+            } else {
+                console.log('✅ Supabase connection verified');
+            }
             
             // Cache invites for all guilds
             for (const guild of this.client.guilds.cache.values()) {
                 await this.cacheGuildInvites(guild);
             }
             
-            console.log('✅ Database invite tracker initialized successfully');
+            console.log('✅ Supabase invite tracker initialized successfully');
         } catch (error) {
             console.error('❌ Error initializing invite tracker:', error);
         }
-    }
-
-    async createTables() {
-        const createUsersTable = `
-            CREATE TABLE IF NOT EXISTS users (
-                user_id VARCHAR(20) PRIMARY KEY,
-                username VARCHAR(255),
-                display_name VARCHAR(255),
-                joins INTEGER DEFAULT 0,
-                bonus INTEGER DEFAULT 0,
-                leaves INTEGER DEFAULT 0,
-                fake INTEGER DEFAULT 0,
-                total_invites INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        `;
-
-        await pool.query(createUsersTable);
-        console.log('📊 Database tables ready');
     }
 
     async cacheGuildInvites(guild) {
@@ -73,10 +53,14 @@ class DatabaseInviteTracker {
 
     async getUser(userId) {
         try {
-            const result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
+            const { data, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('user_id', userId)
+                .single();
             
-            if (result.rows.length > 0) {
-                return result.rows[0];
+            if (data && !error) {
+                return data;
             }
             
             // Create default user if not found
@@ -90,12 +74,13 @@ class DatabaseInviteTracker {
                 fake: 0
             };
             
-            await pool.query(
-                'INSERT INTO users (user_id, username, joins, bonus, leaves, fake, total_invites) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-                [userId, defaultUser.username, 0, 0, 0, 0, 0]
-            );
+            const { data: newUser, error: insertError } = await supabase
+                .from('users')
+                .insert(defaultUser)
+                .select()
+                .single();
             
-            return defaultUser;
+            return newUser || defaultUser;
         } catch (error) {
             console.error('❌ Error getting user:', error);
             return { user_id: userId, username: 'Unknown', total_invites: 0, joins: 0, bonus: 0, leaves: 0, fake: 0 };
@@ -106,12 +91,22 @@ class DatabaseInviteTracker {
         try {
             console.log(`📝 Creating user record for ${username} (${userId})`);
             
-            const result = await pool.query(
-                'INSERT INTO users (user_id, username, display_name, joins, bonus, leaves, fake, total_invites) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-                [userId, username, displayName, 0, 0, 0, 0, 0]
-            );
+            const { data, error } = await supabase
+                .from('users')
+                .insert({
+                    user_id: userId,
+                    username: username,
+                    display_name: displayName,
+                    joins: 0,
+                    bonus: 0,
+                    leaves: 0,
+                    fake: 0,
+                    total_invites: 0
+                })
+                .select()
+                .single();
             
-            return result.rows[0];
+            return data;
         } catch (error) {
             console.error('❌ Error creating user:', error);
             return await this.getUser(userId);
@@ -132,15 +127,23 @@ class DatabaseInviteTracker {
             const newFake = user.fake + fake;
             const newTotal = newJoins + newBonus - newLeaves - newFake;
             
-            // Update in database
-            const result = await pool.query(
-                'UPDATE users SET joins = $1, bonus = $2, leaves = $3, fake = $4, total_invites = $5 WHERE user_id = $6 RETURNING *',
-                [newJoins, newBonus, newLeaves, newFake, newTotal, userId]
-            );
+            // Update in Supabase
+            const { data, error } = await supabase
+                .from('users')
+                .update({
+                    joins: newJoins,
+                    bonus: newBonus,
+                    leaves: newLeaves,
+                    fake: newFake,
+                    total_invites: newTotal
+                })
+                .eq('user_id', userId)
+                .select()
+                .single();
             
             console.log(`✅ User ${userId} now has ${newTotal} total invites (${newJoins} joins + ${newBonus} bonus - ${newLeaves} leaves - ${newFake} fake)`);
             
-            return result.rows[0];
+            return data;
         } catch (error) {
             console.error('❌ Error updating user invites:', error);
             return await this.getUser(userId);
@@ -159,7 +162,7 @@ const client = new Client({
     ]
 });
 
-const inviteTracker = new DatabaseInviteTracker(client);
+const inviteTracker = new SupabaseInviteTracker(client);
 
 // Configuration
 const config = {

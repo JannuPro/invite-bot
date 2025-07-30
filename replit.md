@@ -114,12 +114,12 @@ The architecture prioritizes modularity, maintainability, and scalability while 
 
 ## Recent Changes
 
-**July 30, 2025 - PostgreSQL Database Integration**
-- **Implemented persistent database storage** using PostgreSQL for invite tracking
-- **Automatic table creation** with user invite data schema
-- **Permanent data persistence** - survives bot restarts and crashes
-- **Production-ready reliability** with enterprise-grade database backend
-- All invite data now stored permanently instead of in-memory only
+**July 30, 2025 - Supabase Database Integration**
+- **Switched to Supabase** for free, reliable database storage
+- **Zero additional costs** using Supabase's generous free tier
+- **Production-ready persistence** with enterprise-grade cloud database
+- **Better features** than paid alternatives - real-time, APIs, authentication
+- Manual table creation required via Supabase dashboard (see SUPABASE_SETUP.md)
 
 **July 29, 2025 - Thread System & Auto Invite Tracking Implementation**
 - **Switched to private threads** instead of channels to fix permission errors
