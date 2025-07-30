@@ -210,38 +210,102 @@ class SimplifiedInviteTracker {
      * @returns {Promise<Object>} Updated user data
      */
     async removeInvites(userId, amount) {
-        console.log(`➖ Removing ${amount} invites from user ${userId}`);
-        const user = await this.getUser(userId);
-        
-        // Remove from bonus first, then from regular invites
-        if (user.bonus >= amount) {
-            user.bonus -= amount;
-        } else {
-            const remaining = amount - user.bonus;
-            user.bonus = 0;
-            user.joins = Math.max(0, user.joins - remaining);
+        try {
+            console.log(`➖ Removing ${amount} invites from user ${userId}`);
+            
+            // Get current user data
+            const user = await this.getUser(userId);
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            // Calculate new values (remove from bonus first, then from joins)
+            let newBonus = Math.max(0, user.bonus - amount);
+            let remainingToRemove = Math.max(0, amount - user.bonus);
+            let newJoins = Math.max(0, user.joins - remainingToRemove);
+
+            const { data, error } = await this.supabase
+                .from('users')
+                .update({
+                    joins: newJoins,
+                    bonus: newBonus
+                })
+                .eq('user_id', userId)
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            console.log(`✅ Removed ${amount} invites from user ${userId}`);
+            // Return updated user with calculated total
+            return await this.getUser(userId);
+        } catch (error) {
+            console.error('Error removing invites:', error);
+            throw error;
         }
-        
-        user.total_invites = user.joins + user.bonus - user.leaves - user.fake;
-        
-        // Store updated user data
-        this.userData.set(userId, user);
-        console.log(`✅ User ${userId} now has ${user.total_invites} total invites`);
-        return user;
     }
 
     /**
-     * Get guild config (simplified)
+     * Get guild config
      * @param {string} guildId - Guild ID
      * @returns {Promise<Object|null>} Guild config or null
      */
     async getGuildConfig(guildId) {
-        return {
-            guild_id: guildId,
-            minimum_account_age: 30,
-            welcome_channel_id: null,
-            log_channel_id: null
-        };
+        try {
+            const { data, error } = await this.supabase
+                .from('guild_config')
+                .select('*')
+                .eq('guild_id', guildId)
+                .single();
+
+            if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+                throw error;
+            }
+
+            return data || {
+                guild_id: guildId,
+                minimum_account_age: 30,
+                welcome_channel_id: null,
+                log_channel_id: null
+            };
+        } catch (error) {
+            console.error('Error getting guild config:', error);
+            return {
+                guild_id: guildId,
+                minimum_account_age: 30,
+                welcome_channel_id: null,
+                log_channel_id: null
+            };
+        }
+    }
+
+    /**
+     * Set guild config
+     * @param {string} guildId - Guild ID
+     * @param {Object} config - Config object to update
+     * @returns {Promise<Object>} Updated config
+     */
+    async setGuildConfig(guildId, config) {
+        try {
+            const { data, error } = await this.supabase
+                .from('guild_config')
+                .upsert({
+                    guild_id: guildId,
+                    ...config
+                }, {
+                    onConflict: 'guild_id'
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+            
+            console.log(`✅ Updated guild config for ${guildId}`);
+            return data;
+        } catch (error) {
+            console.error('Error setting guild config:', error);
+            throw error;
+        }
     }
 
     /**

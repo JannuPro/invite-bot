@@ -114,13 +114,13 @@ The architecture prioritizes modularity, maintainability, and scalability while 
 
 ## Recent Changes
 
-**July 30, 2025 - Supabase Database Integration & Comprehensive Logging**
-- **Switched to Supabase** for free, reliable database storage with zero costs
-- **Fixed missing methods** - addBonusInvites, getLeaderboard, guild config management
-- **Added join/leave logging** with rich embeds showing joiner, inviter, invite code
-- **Created /set-log-channel command** for admins to configure log destinations
-- **Comprehensive audit trails** with detailed database logging of all invite activity
-- **Enterprise-grade persistence** with 4-table schema (users, join_log, guild_config, invite_rewards)
+**July 30, 2025 - Bug Fixes & Simplified Logging**
+- **Fixed invite remove command** - removeInvites method now works with Supabase database
+- **Fixed leave tracking bug** - users leaving/rejoining now properly maintain invite counts
+- **Simplified join/leave logs** - clean user messages instead of complex embeds
+- **Fixed /set-log-channel command** - now properly saves to guild_config table
+- **Resolved console errors** - all missing methods implemented and functional
+- **Improved user experience** - cleaner logging that's easier to read and understand
 
 **July 29, 2025 - Thread System & Auto Invite Tracking Implementation**
 - **Switched to private threads** instead of channels to fix permission errors

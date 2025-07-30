@@ -289,7 +289,7 @@ function createInviteCheckEmbed(title, description, initiator) {
         .setTimestamp();
 }
 
-// Join/Leave logging functions
+// Join/Leave logging functions - simple messages only
 async function sendJoinLog(member, inviter, inviteCode) {
     try {
         const guildConfig = await inviteTracker.getGuildConfig(member.guild.id);
@@ -298,19 +298,10 @@ async function sendJoinLog(member, inviter, inviteCode) {
         const logChannel = member.guild.channels.cache.get(guildConfig.log_channel_id);
         if (!logChannel) return;
         
-        const joinEmbed = new EmbedBuilder()
-            .setTitle('📥 Member Joined')
-            .setColor(0x00ff00)
-            .addFields(
-                { name: '👤 User', value: `${member.user.tag} (${member.user.id})`, inline: true },
-                { name: '🎫 Invited by', value: `${inviter.tag} (${inviter.id})`, inline: true },
-                { name: '🔗 Invite Code', value: inviteCode, inline: true },
-                { name: '📊 Member Count', value: member.guild.memberCount.toString(), inline: true }
-            )
-            .setTimestamp()
-            .setThumbnail(member.user.displayAvatarURL());
+        const inviterName = inviter ? inviter.username : 'Unknown';
+        const message = `👋 **${member.user.username}** joined the server! Invited by **${inviterName}**`;
         
-        await logChannel.send({ embeds: [joinEmbed] });
+        await logChannel.send(message);
     } catch (error) {
         console.error('Error sending join log:', error);
     }
@@ -324,17 +315,9 @@ async function sendLeaveLog(member) {
         const logChannel = member.guild.channels.cache.get(guildConfig.log_channel_id);
         if (!logChannel) return;
         
-        const leaveEmbed = new EmbedBuilder()
-            .setTitle('📤 Member Left')
-            .setColor(0xff0000)
-            .addFields(
-                { name: '👤 User', value: `${member.user.tag} (${member.user.id})`, inline: true },
-                { name: '📊 Member Count', value: member.guild.memberCount.toString(), inline: true }
-            )
-            .setTimestamp()
-            .setThumbnail(member.user.displayAvatarURL());
+        const message = `👋 **${member.user.username}** left the server.`;
         
-        await logChannel.send({ embeds: [leaveEmbed] });
+        await logChannel.send(message);
     } catch (error) {
         console.error('Error sending leave log:', error);
     }
