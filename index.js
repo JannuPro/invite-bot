@@ -154,6 +154,43 @@ class SupabaseInviteTracker {
         return await this.updateUserInvites(userId, 0, amount, 0, 0);
     }
 
+    async removeInvites(userId, amount) {
+        try {
+            console.log(`➖ Removing ${amount} invites from user ${userId}`);
+            
+            // Get current user data
+            const user = await this.getUser(userId);
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            // Calculate new values (remove from bonus first, then from joins)
+            let newBonus = Math.max(0, user.bonus - amount);
+            let remainingToRemove = Math.max(0, amount - user.bonus);
+            let newJoins = Math.max(0, user.joins - remainingToRemove);
+            let newTotal = newJoins + newBonus - user.leaves - user.fake;
+
+            const { data, error } = await supabase
+                .from('users')
+                .update({
+                    joins: newJoins,
+                    bonus: newBonus,
+                    total_invites: newTotal
+                })
+                .eq('user_id', userId)
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            console.log(`✅ Removed ${amount} invites from user ${userId}`);
+            return data;
+        } catch (error) {
+            console.error('Error removing invites:', error);
+            throw error;
+        }
+    }
+
     async getLeaderboard(limit = 10) {
         try {
             const { data, error } = await supabase
