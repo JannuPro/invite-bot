@@ -756,6 +756,39 @@ async function handleSlashCommand(interaction) {
         }
     }
     
+    // Handle /set-log-channel command
+    else if (commandName === 'set-log-channel') {
+        // Check admin permissions
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return await interaction.reply({
+                content: '❌ You need Administrator permission to set log channels.',
+                flags: [4096]
+            });
+        }
+        
+        const logChannel = interaction.options.getChannel('channel');
+        
+        try {
+            // Set the log channel in guild config
+            await inviteTracker.setGuildConfig(interaction.guild.id, {
+                log_channel_id: logChannel.id
+            });
+            
+            await interaction.reply({
+                content: `✅ Join/leave logs will now be sent to ${logChannel}`,
+                flags: [4096]
+            });
+            
+            console.log(`Log channel set to ${logChannel.name} (${logChannel.id}) by ${interaction.user.username}`);
+        } catch (error) {
+            console.error('Error setting log channel:', error);
+            await interaction.reply({
+                content: '❌ Failed to set log channel. Please try again.',
+                flags: [4096]
+            });
+        }
+    }
+    
     else if (commandName === 'invites-remove') {
         // Check admin permissions
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
@@ -1532,6 +1565,33 @@ client.on('guildMemberAdd', async member => {
 client.on('guildMemberRemove', async member => {
     try {
         console.log(`👋 ${member.user.username} left ${member.guild.name}`);
+        
+        // Find who invited this user and decrement their invites
+        const { data: joinRecord } = await supabase
+            .from('join_log')
+            .select('inviter_id')
+            .eq('invited_user_id', member.user.id)
+            .eq('guild_id', member.guild.id)
+            .eq('is_left', false)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+        if (joinRecord && joinRecord.inviter_id) {
+            // Mark the join record as left
+            await supabase
+                .from('join_log')
+                .update({ is_left: true, left_at: new Date().toISOString() })
+                .eq('invited_user_id', member.user.id)
+                .eq('inviter_id', joinRecord.inviter_id)
+                .eq('guild_id', member.guild.id)
+                .eq('is_left', false);
+
+            // Decrement the inviter's leave count (which reduces total invites)
+            await inviteTracker.updateUserInvites(joinRecord.inviter_id, 0, 0, 1, 0);
+            
+            console.log(`📉 Decremented invite for inviter ${joinRecord.inviter_id} due to ${member.user.username} leaving`);
+        }
         
         // Send leave log to channel if configured
         await sendLeaveLog(member);
