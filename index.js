@@ -1,5 +1,152 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
-const SimplifiedInviteTracker = require('./simplifiedInviteTracker.js');
+const { Pool } = require('pg');
+
+// PostgreSQL connection
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: false
+});
+
+// Simplified database-backed invite tracker
+class DatabaseInviteTracker {
+    constructor(client) {
+        this.client = client;
+        this.guildInvites = new Map();
+    }
+
+    async init() {
+        console.log('🔄 Initializing database invite tracker...');
+        
+        try {
+            // Create tables if they don't exist
+            await this.createTables();
+            
+            // Cache invites for all guilds
+            for (const guild of this.client.guilds.cache.values()) {
+                await this.cacheGuildInvites(guild);
+            }
+            
+            console.log('✅ Database invite tracker initialized successfully');
+        } catch (error) {
+            console.error('❌ Error initializing invite tracker:', error);
+        }
+    }
+
+    async createTables() {
+        const createUsersTable = `
+            CREATE TABLE IF NOT EXISTS users (
+                user_id VARCHAR(20) PRIMARY KEY,
+                username VARCHAR(255),
+                display_name VARCHAR(255),
+                joins INTEGER DEFAULT 0,
+                bonus INTEGER DEFAULT 0,
+                leaves INTEGER DEFAULT 0,
+                fake INTEGER DEFAULT 0,
+                total_invites INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `;
+
+        await pool.query(createUsersTable);
+        console.log('📊 Database tables ready');
+    }
+
+    async cacheGuildInvites(guild) {
+        try {
+            const invites = await guild.invites.fetch();
+            const inviteData = new Map();
+            
+            for (const [code, invite] of invites) {
+                inviteData.set(code, {
+                    code: invite.code,
+                    uses: invite.uses || 0,
+                    inviterId: invite.inviter?.id || null
+                });
+            }
+            
+            this.guildInvites.set(guild.id, inviteData);
+            console.log(`📈 Cached ${invites.size} invites for guild ${guild.name}`);
+        } catch (error) {
+            console.error(`❌ Failed to cache invites for guild ${guild.name}:`, error);
+        }
+    }
+
+    async getUser(userId) {
+        try {
+            const result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
+            
+            if (result.rows.length > 0) {
+                return result.rows[0];
+            }
+            
+            // Create default user if not found
+            const defaultUser = {
+                user_id: userId,
+                username: 'Unknown',
+                total_invites: 0,
+                joins: 0,
+                bonus: 0,
+                leaves: 0,
+                fake: 0
+            };
+            
+            await pool.query(
+                'INSERT INTO users (user_id, username, joins, bonus, leaves, fake, total_invites) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+                [userId, defaultUser.username, 0, 0, 0, 0, 0]
+            );
+            
+            return defaultUser;
+        } catch (error) {
+            console.error('❌ Error getting user:', error);
+            return { user_id: userId, username: 'Unknown', total_invites: 0, joins: 0, bonus: 0, leaves: 0, fake: 0 };
+        }
+    }
+
+    async createUser(userId, username, displayName, accountAge) {
+        try {
+            console.log(`📝 Creating user record for ${username} (${userId})`);
+            
+            const result = await pool.query(
+                'INSERT INTO users (user_id, username, display_name, joins, bonus, leaves, fake, total_invites) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+                [userId, username, displayName, 0, 0, 0, 0, 0]
+            );
+            
+            return result.rows[0];
+        } catch (error) {
+            console.error('❌ Error creating user:', error);
+            return await this.getUser(userId);
+        }
+    }
+
+    async updateUserInvites(userId, joins = 0, bonus = 0, leaves = 0, fake = 0) {
+        try {
+            console.log(`📊 Updating invites for ${userId}: +${joins} joins, +${bonus} bonus, +${leaves} leaves, +${fake} fake`);
+            
+            // Get current user data
+            const user = await this.getUser(userId);
+            
+            // Calculate new values
+            const newJoins = user.joins + joins;
+            const newBonus = user.bonus + bonus;
+            const newLeaves = user.leaves + leaves;
+            const newFake = user.fake + fake;
+            const newTotal = newJoins + newBonus - newLeaves - newFake;
+            
+            // Update in database
+            const result = await pool.query(
+                'UPDATE users SET joins = $1, bonus = $2, leaves = $3, fake = $4, total_invites = $5 WHERE user_id = $6 RETURNING *',
+                [newJoins, newBonus, newLeaves, newFake, newTotal, userId]
+            );
+            
+            console.log(`✅ User ${userId} now has ${newTotal} total invites (${newJoins} joins + ${newBonus} bonus - ${newLeaves} leaves - ${newFake} fake)`);
+            
+            return result.rows[0];
+        } catch (error) {
+            console.error('❌ Error updating user invites:', error);
+            return await this.getUser(userId);
+        }
+    }
+}
 require('dotenv').config();
 
 // Create Discord client with necessary intents
@@ -12,7 +159,7 @@ const client = new Client({
     ]
 });
 
-const inviteTracker = new SimplifiedInviteTracker(client);
+const inviteTracker = new DatabaseInviteTracker(client);
 
 // Configuration
 const config = {

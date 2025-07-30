@@ -114,6 +114,13 @@ The architecture prioritizes modularity, maintainability, and scalability while 
 
 ## Recent Changes
 
+**July 30, 2025 - PostgreSQL Database Integration**
+- **Implemented persistent database storage** using PostgreSQL for invite tracking
+- **Automatic table creation** with user invite data schema
+- **Permanent data persistence** - survives bot restarts and crashes
+- **Production-ready reliability** with enterprise-grade database backend
+- All invite data now stored permanently instead of in-memory only
+
 **July 29, 2025 - Thread System & Auto Invite Tracking Implementation**
 - **Switched to private threads** instead of channels to fix permission errors
 - **Implemented automatic invite tracking** for real Discord invites via member join events
